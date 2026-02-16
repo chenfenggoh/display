@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://api.data.gov.sg https://arrivelah2.busrouter.sg https://api.openweathermap.org; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://arrivelah2.busrouter.sg https://data.busrouter.sg https://api.openweathermap.org; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
   <title>NTU Smart Display</title>
   <style>
     /* Fallback font stack while Google Fonts loads (or on file://) */
@@ -1280,20 +1280,15 @@
 
     <!-- ── TAB: API KEYS ── -->
     <div class="cfg-pane" id="pane-api">
-      <div class="ntu-notice" style="margin-bottom:14px;background:rgba(0,229,255,.04);border-color:rgba(0,229,255,.2)">
-        <strong style="color:var(--accent)">✅ No API keys required by default.</strong><br>
-        Bus data uses <strong>arrivelah (busrouter.sg)</strong> — free, open, CORS-friendly.<br>
-        Weather uses <strong>NEA data.gov.sg</strong> — Singapore official open data, no key needed.
-      </div>
       <div class="field">
-        <label>LTA DataMall API Key <span style="color:var(--muted)">(optional fallback)</span></label>
+        <label>OpenWeatherMap API Key <span style="color:var(--accent2)">*</span></label>
+        <input type="text" id="cfgWeatherKey" placeholder="e.g. 6700d5059665b3a2e3abbe0ac5c7ba60" />
+        <small>Required for weather. Free at <strong>openweathermap.org</strong> → API keys → Free tier.</small>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>LTA DataMall API Key <span style="color:var(--muted)">(optional)</span></label>
         <input type="text" id="cfgLtaKey" placeholder="e.g. AbCd1234efGh5678==" />
-        <small>Used only if arrivelah is unavailable. Free from <strong>datamall.lta.gov.sg</strong></small>
-      </div>
-      <div class="field">
-        <label>OpenWeatherMap API Key <span style="color:var(--muted)">(optional fallback)</span></label>
-        <input type="text" id="cfgWeatherKey" placeholder="e.g. 1a2b3c4d5e6f7890abcd…" />
-        <small>Used only if NEA data.gov.sg is unavailable. Free from <strong>openweathermap.org</strong></small>
+        <small>Not needed — bus arrivals use arrivelah (free proxy). Only add if arrivelah is down. Free from <strong>datamall.lta.gov.sg</strong>.</small>
       </div>
     </div>
 
@@ -1387,102 +1382,6 @@ const NTU_STOPS = [
 ];
 
 const UNIQUE_STOPS = NTU_STOPS;
-
-// ═══════════════════════════════════════════════════
-// PUBLIC BUS STOP DATABASE (NTU area stops)
-// ═══════════════════════════════════════════════════
-const PUBLIC_BUS_STOPS = [
-  { area: 'On Campus – NTU',    code: '27219', name: 'NIE Block 2',                   routes: '179, CL-B, CL-R' },
-  { area: 'On Campus – NTU',    code: '27211', name: 'Lee Wee Nam Library',           routes: '179, 179A, CL-B, CL-R' },
-  { area: 'On Campus – NTU',    code: '27201', name: 'Opp Hall 8 (Nanyang Heights)',  routes: '179, CL-B, CL-R' },
-  { area: 'On Campus – NTU',    code: '63725', name: 'Opp Hall 2 (Lien Ying Chow)',   routes: '179, 199, CL-B, CL-R' },
-  { area: 'On Campus – NTU',    code: '63709', name: 'Opp SPMS / South Spine',        routes: '179, 199, CL-B, CL-R' },
-  { area: 'On Campus – NTU',    code: '63721', name: 'Admin Cluster / The Hive',      routes: '179, 199, CL-B, CL-R' },
-  { area: 'On Campus – NTU',    code: '63723', name: 'Opp WKWSCI / North Spine',      routes: '179, CL-B, CL-R' },
-  { area: 'On Campus – NTU',    code: '63705', name: 'Gaia / Academic Building South',routes: '179, 199, CL-B, CL-R' },
-  { area: 'On Campus – NTU',    code: '63731', name: 'Opp Yunnan Garden',             routes: '179, 199, CL-B, CL-R' },
-  { area: 'Halls & Residences', code: '27321', name: 'Hall 1 / Opp Hall 16',          routes: '179, 179B, CL-B' },
-  { area: 'Halls & Residences', code: '63703', name: 'Opp Hall 10 & 11',             routes: '199, CL-B, CL-R' },
-  { area: 'Halls & Residences', code: '63733', name: 'Opp Hall 14 & 15',             routes: '199, CL-B, CL-R' },
-  { area: 'Halls & Residences', code: '27331', name: 'Pioneer Hall / Nanyang Terrace',routes: '179, CL-R, CR' },
-  { area: 'Pioneer MRT (EW28)', code: '24481', name: 'Pioneer MRT Exit B (to NTU)',   routes: '179, CR, CWR' },
-  { area: 'Pioneer MRT (EW28)', code: '24489', name: 'Opp Pioneer MRT / Exit A',      routes: '179, 99, 99A' },
-  { area: 'Boon Lay (EW27)',    code: '22009', name: 'Boon Lay Bus Interchange (A)',  routes: '179, 179A, 199, 77' },
-  { area: 'Boon Lay (EW27)',    code: '22099', name: 'Boon Lay Bus Interchange (B)',  routes: '179, 199, 98A, 243' },
-  { area: 'Boon Lay (EW27)',    code: '22159', name: 'Opp Jurong Point',              routes: '77, 98, 98A, 179, 179A' },
-];
-const PUBLIC_BUS_MAP = {};
-PUBLIC_BUS_STOPS.forEach(s => { PUBLIC_BUS_MAP[s.code] = s; });
-
-let selectedStops = [];
-
-function renderBusStopList(query = '') {
-  const container = document.getElementById('busStopListContainer');
-  if (!container) return;
-  const q = query.toLowerCase().trim();
-  const areas = {};
-  PUBLIC_BUS_STOPS.forEach(stop => {
-    if (q && !stop.name.toLowerCase().includes(q) &&
-             !stop.code.includes(q) &&
-             !stop.routes.toLowerCase().includes(q) &&
-             !stop.area.toLowerCase().includes(q)) return;
-    if (!areas[stop.area]) areas[stop.area] = [];
-    areas[stop.area].push(stop);
-  });
-  let html = '';
-  for (const [area, stops] of Object.entries(areas)) {
-    html += `<div class="stop-area-label">${area}</div>`;
-    stops.forEach(stop => {
-      const sel = selectedStops.includes(stop.code);
-      html += `<div class="stop-item ${sel ? 'selected' : ''}" onclick="toggleBusStop('${stop.code}')">
-        <span class="si-code">${stop.code}</span>
-        <span class="si-name">${stop.name}</span>
-        <span class="si-routes">${stop.routes}</span>
-        <span class="si-check">${sel ? '✓' : ''}</span>
-      </div>`;
-    });
-  }
-  if (!html) html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">No stops found</div>`;
-  container.innerHTML = html;
-}
-
-function filterBusStops(q) { renderBusStopList(q); }
-
-function toggleBusStop(code) {
-  const idx = selectedStops.indexOf(code);
-  if (idx > -1) {
-    selectedStops.splice(idx, 1);
-  } else {
-    if (selectedStops.length >= 3) {
-      const prev = document.getElementById('selectedStopsPreview');
-      if (prev) { prev.style.borderColor = 'var(--danger)'; setTimeout(() => prev.style.borderColor = '', 800); }
-      return;
-    }
-    selectedStops.push(code);
-  }
-  renderSelectedChips();
-  renderBusStopList(document.getElementById('busStopSearchInput')?.value || '');
-}
-
-function renderSelectedChips() {
-  const preview = document.getElementById('selectedStopsPreview');
-  if (!preview) return;
-  if (selectedStops.length === 0) {
-    preview.innerHTML = `<span style="color:var(--muted);font-size:.75rem">No stops selected — pick from the list below</span>`;
-    return;
-  }
-  preview.innerHTML = selectedStops.map(code => {
-    const stop = PUBLIC_BUS_MAP[code];
-    const label = stop ? `${code} · ${stop.name.split('(')[0].trim()}` : code;
-    return `<span class="sel-chip">${label}<button onclick="removeBusStop('${code}')" title="Remove">×</button></span>`;
-  }).join('');
-}
-
-function removeBusStop(code) {
-  selectedStops = selectedStops.filter(c => c !== code);
-  renderSelectedChips();
-  renderBusStopList(document.getElementById('busStopSearchInput')?.value || '');
-}
 
 // ═══════════════════════════════════════════════════
 // CONFIG & STATE
@@ -2189,24 +2088,23 @@ async function spInit() {
 }
 
 // ═══════════════════════════════════════════════════
-// WEATHER — NEA data.gov.sg (primary) + OWM fallback
+// WEATHER — OpenWeatherMap (requires API key in Settings → API Keys)
 // ═══════════════════════════════════════════════════
-const WEATHER_ICON = {
-  'Fair':'☀️','Fair (Day)':'☀️','Fair (Night)':'🌙',
-  'Fair & Warm':'🌤️','Partly Cloudy':'⛅','Partly Cloudy (Day)':'⛅','Partly Cloudy (Night)':'🌥️',
-  'Cloudy':'☁️','Hazy':'🌫️','Slightly Hazy':'🌫️',
-  'Windy':'💨','Mist':'🌫️','Fog':'🌫️',
-  'Light Rain':'🌦️','Moderate Rain':'🌧️','Heavy Rain':'🌧️',
-  'Passing Showers':'🌦️','Light Showers':'🌦️','Showers':'🌧️','Heavy Showers':'🌧️',
-  'Thundery Showers':'⛈️','Heavy Thundery Showers':'⛈️',
-  'Heavy Thundery Showers with Gusty Winds':'⛈️',
-};
-function wxIcon(desc) {
-  return WEATHER_ICON[desc] || (desc.includes('Thunder') ? '⛈️' : desc.includes('Rain') ? '🌧️' : '⛅');
-}
-function wxWindDir(deg) {
-  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-  return dirs[Math.round(deg / 22.5) % 16];
+function wxIcon(code, desc) {
+  if (!code) return '🌡️';
+  const id = parseInt(code);
+  if (id >= 200 && id < 300) return '⛈️';
+  if (id >= 300 && id < 400) return '🌦️';
+  if (id >= 500 && id < 510) return '🌧️';
+  if (id === 511)             return '🌨️';
+  if (id >= 510 && id < 600) return '🌦️';
+  if (id >= 600 && id < 700) return '🌨️';
+  if (id >= 700 && id < 800) return '🌫️';
+  if (id === 800)             return '☀️';
+  if (id === 801)             return '🌤️';
+  if (id === 802)             return '⛅';
+  if (id >= 803)              return '☁️';
+  return '🌡️';
 }
 function wxHeatIndex(tempC, rh) {
   const T = tempC * 9/5 + 32, R = rh;
@@ -2216,66 +2114,15 @@ function wxHeatIndex(tempC, rh) {
   return ((hi - 32) * 5/9).toFixed(1);
 }
 
-async function fetchWeatherNEA() {
-  const BASE = 'https://api.data.gov.sg/v1/environment';
-  const [tempR, humR, windR, fcR] = await Promise.all([
-    fetch(`${BASE}/air-temperature`),
-    fetch(`${BASE}/relative-humidity`),
-    fetch(`${BASE}/wind-speed`),
-    fetch(`${BASE}/24-hour-weather-forecast`),
-  ]);
-  const [tempD, humD, windD, fcD] = await Promise.all([
-    tempR.json(), humR.json(), windR.json(), fcR.json()
-  ]);
-
-  // Find nearest reading to NTU (Jurong West area)
-  const pickNearest = (readings, lat=1.3483, lon=103.6831) => {
-    if (!readings?.length) return null;
-    return readings.reduce((best, r) => {
-      if (!r.location) return best;
-      const d = Math.hypot(r.location.latitude - lat, r.location.longitude - lon);
-      return (!best || d < best.d) ? { ...r, d } : best;
-    }, null);
-  };
-
-  const tempReading = pickNearest(tempD.items?.[0]?.readings);
-  const humReading  = pickNearest(humD.items?.[0]?.readings);
-  const windReading = pickNearest(windD.items?.[0]?.readings);
-  const fc          = fcD.items?.[0]?.general;
-
-  const temp = tempReading?.value ?? '—';
-  const hum  = humReading?.value  ?? '—';
-  const wind = windReading?.value ?? '—';
-  const desc = fc?.forecast ?? 'No forecast';
-  const hi   = (typeof temp === 'number' && typeof hum === 'number')
-               ? wxHeatIndex(temp, hum) : null;
-
-  renderWeather({ temp, hum, wind, desc, hi, source: 'NEA' });
-}
-
-async function fetchWeatherOWM(apiKey) {
-  const url = `https://api.openweathermap.org/data/2.5/weather?lat=1.3483&lon=103.6831&appid=${apiKey}&units=metric`;
-  const res  = await fetch(url);
-  if (!res.ok) throw new Error(`OWM ${res.status}`);
-  const d    = await res.json();
-  const temp = d.main.temp.toFixed(1);
-  const hum  = d.main.humidity;
-  const wind = (d.wind.speed * 3.6).toFixed(1); // m/s → km/h
-  const desc = d.weather[0].description.replace(/\b\w/g, c => c.toUpperCase());
-  const hi   = wxHeatIndex(parseFloat(temp), hum);
-  renderWeather({ temp, hum, wind, desc, hi, source: 'OWM', windKmh: true });
-}
-
-function renderWeather({ temp, hum, wind, desc, hi, source, windKmh }) {
+function renderWeather({ temp, feels, hum, wind, desc, code, hi }) {
   const el = document.getElementById('weatherContent');
   if (!el) return;
-  const icon    = wxIcon(desc);
-  const windStr = windKmh ? `${wind} km/h` : `${wind} km/h`;
+  const icon = wxIcon(code, desc);
   el.innerHTML = `
     <div class="weather-main">
       <div class="weather-icon">${icon}</div>
       <div>
-        <div class="weather-temp">${temp}<span class="weather-unit">°C</span></div>
+        <div class="weather-temp">${parseFloat(temp).toFixed(1)}<span class="weather-unit">°C</span></div>
         <div class="weather-desc">${desc}</div>
       </div>
     </div>
@@ -2286,60 +2133,197 @@ function renderWeather({ temp, hum, wind, desc, hi, source, windKmh }) {
       </div>
       <div class="weather-detail">
         <div class="wlabel">Wind</div>
-        <div class="wval">${windStr}</div>
+        <div class="wval">${wind} km/h</div>
       </div>
-      ${hi ? `<div class="weather-detail">
+      <div class="weather-detail">
+        <div class="wlabel">Feels Like</div>
+        <div class="wval">${parseFloat(feels).toFixed(1)}°C</div>
+      </div>
+      <div class="weather-detail">
         <div class="wlabel">Heat Index</div>
         <div class="wval">${hi}°C</div>
-      </div>` : ''}
-      <div class="weather-detail">
-        <div class="wlabel">Location</div>
-        <div class="wval" style="font-size:.7rem">Jurong West</div>
       </div>
     </div>`;
 }
 
 async function fetchWeather() {
+  const key = cfg.weatherKey;
+  const el  = document.getElementById('weatherContent');
+  if (!key) {
+    if (el) el.innerHTML = `<div class="sp-idle" style="padding:12px 0">
+      <div class="sp-idle-icon">🌡️</div>
+      <div class="sp-idle-text">Add OpenWeatherMap API key in<br>⚙ Settings → API Keys</div>
+    </div>`;
+    return;
+  }
   try {
-    await fetchWeatherNEA();
-  } catch (e) {
-    console.warn('NEA weather failed:', e.message);
-    if (cfg.weatherKey) {
-      try { await fetchWeatherOWM(cfg.weatherKey); return; } catch(e2) { console.warn('OWM fallback failed:', e2.message); }
+    // NTU / Jurong West coordinates
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=1.3483&lon=103.6831&appid=${key}&units=metric`;
+    const res  = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
     }
-    const el = document.getElementById('weatherContent');
-    if (el) el.innerHTML = `<div class="loading-text" style="color:var(--muted)">Weather unavailable</div>`;
+    const d    = await res.json();
+    const temp = d.main.temp;
+    const feels= d.main.feels_like;
+    const hum  = d.main.humidity;
+    const wind = (d.wind.speed * 3.6).toFixed(1);
+    const desc = d.weather[0].description.replace(/\b\w/g, c => c.toUpperCase());
+    const code = d.weather[0].id;
+    const hi   = wxHeatIndex(temp, hum);
+    renderWeather({ temp, feels, hum, wind, desc, code, hi });
+  } catch (e) {
+    console.warn('Weather fetch error:', e.message);
+    if (el) el.innerHTML = `<div class="sp-idle" style="padding:12px 0">
+      <div class="sp-idle-icon">⚠️</div>
+      <div class="sp-idle-text" style="color:var(--accent2)">Weather error:<br><small>${e.message}</small></div>
+    </div>`;
   }
 }
 
 // ═══════════════════════════════════════════════════
-// PUBLIC BUS — arrivelah (busrouter.sg) proxy for LTA
+// PUBLIC BUS — arrivelah proxy (CORS-safe) for LTA data
+// Singapore bus stop database from data.busrouter.sg
 // ═══════════════════════════════════════════════════
 let ltaRefreshInterval = null;
+let sgStopsDb = null;   // { "12345": [lat, lon, "Stop Name"], ... }
+let sgStopsArr = [];    // [{ code, name, lat, lon }, ...]
 
-function fmtArrival(mins) {
-  if (mins <= 0)  return { text: 'Arr', cls: 'arriving' };
-  if (mins === 1) return { text: '1 min', cls: 'arriving' };
-  return { text: `${mins} min`, cls: mins <= 3 ? 'next' : '' };
+async function loadSgStops() {
+  if (sgStopsDb) return;  // already loaded
+  const CACHE_KEY = 'sg_bus_stops_v1';
+  const CACHE_AGE = 24 * 60 * 60 * 1000; // 1 day
+
+  try {
+    // Try sessionStorage cache first
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      if (Date.now() - ts < CACHE_AGE) {
+        sgStopsDb  = data;
+        sgStopsArr = Object.entries(data).map(([code, v]) => ({ code, lat: v[0], lon: v[1], name: v[2] }));
+        return;
+      }
+    }
+  } catch (_) {}
+
+  try {
+    const res  = await fetch('https://data.busrouter.sg/v1/stops.min.json');
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    sgStopsDb  = data;
+    sgStopsArr = Object.entries(data).map(([code, v]) => ({ code, lat: v[0], lon: v[1], name: v[2] }));
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+    } catch (_) {}
+  } catch (e) {
+    console.warn('Could not load SG bus stops:', e.message);
+  }
 }
-function loadClass(load) {
-  if (!load) return '';
-  if (load === 'SEA') return 'pb-load-full';
-  if (load === 'SDA') return 'pb-load-stand';
-  return 'pb-load-seat';
+
+function renderBusStopList(query = '') {
+  const container = document.getElementById('busStopListContainer');
+  if (!container) return;
+
+  if (!sgStopsArr.length) {
+    container.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">Loading stop database…</div>`;
+    loadSgStops().then(() => renderBusStopList(query));
+    return;
+  }
+
+  const q = query.trim().toLowerCase();
+  // Filter: code exact prefix, or name contains, require at least 2 chars to search
+  let results = q.length >= 2
+    ? sgStopsArr.filter(s =>
+        s.code.startsWith(q) ||
+        s.name.toLowerCase().includes(q)
+      ).slice(0, 60)  // cap at 60 for performance
+    : sgStopsArr.filter(s => selectedStops.includes(s.code)); // show only selected when no query
+
+  let html = '';
+  if (!q && selectedStops.length === 0) {
+    html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">Search above to find stops across Singapore</div>`;
+  } else if (results.length === 0) {
+    html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">No stops found for "${query}"</div>`;
+  } else {
+    results.forEach(stop => {
+      const sel = selectedStops.includes(stop.code);
+      html += `<div class="stop-item ${sel ? 'selected' : ''}" onclick="toggleBusStop('${stop.code}','${stop.name.replace(/'/g,"\\'")}')">
+        <span class="si-code">${stop.code}</span>
+        <span class="si-name">${stop.name}</span>
+        <span class="si-check">${sel ? '✓' : ''}</span>
+      </div>`;
+    });
+    if (q.length >= 2 && sgStopsArr.filter(s => s.code.startsWith(q) || s.name.toLowerCase().includes(q)).length > 60) {
+      html += `<div style="padding:8px 12px;color:var(--muted);font-size:.7rem">Showing first 60 results — refine your search</div>`;
+    }
+  }
+  container.innerHTML = html;
 }
-function loadLabel(load) {
-  if (load === 'SEA') return '🔴';
-  if (load === 'SDA') return '🟡';
-  if (load === 'LSD') return '🟢';
+
+function filterBusStops(q) { renderBusStopList(q); }
+
+function toggleBusStop(code, name) {
+  const idx = selectedStops.indexOf(code);
+  if (idx > -1) {
+    selectedStops.splice(idx, 1);
+  } else {
+    if (selectedStops.length >= 3) {
+      const prev = document.getElementById('selectedStopsPreview');
+      if (prev) { prev.style.borderColor = 'var(--danger)'; setTimeout(() => prev.style.borderColor = '', 800); }
+      return;
+    }
+    selectedStops.push(code);
+    // Cache name for display
+    if (name && !sgStopsDb?.[code]) {}  // name passed from DOM
+  }
+  renderSelectedChips();
+  renderBusStopList(document.getElementById('busStopSearchInput')?.value || '');
+}
+
+function renderSelectedChips() {
+  const preview = document.getElementById('selectedStopsPreview');
+  if (!preview) return;
+  if (selectedStops.length === 0) {
+    preview.innerHTML = `<span style="color:var(--muted);font-size:.75rem">No stops selected — search and tap to add</span>`;
+    return;
+  }
+  preview.innerHTML = selectedStops.map(code => {
+    const stop = sgStopsDb?.[code];
+    const label = stop ? `${code} · ${stop[2]}` : code;
+    return `<span class="sel-chip">${label}<button onclick="removeBusStop('${code}')" title="Remove">×</button></span>`;
+  }).join('');
+}
+
+function removeBusStop(code) {
+  selectedStops = selectedStops.filter(c => c !== code);
+  renderSelectedChips();
+  renderBusStopList(document.getElementById('busStopSearchInput')?.value || '');
+}
+
+function fmtMins(ms) {
+  if (ms == null) return null;
+  const m = Math.round(ms / 60000);
+  return m;
+}
+function arrivalCls(mins) {
+  if (mins <= 0)  return 'arriving';
+  if (mins <= 2)  return 'arriving';
+  if (mins <= 5)  return 'next';
   return '';
 }
-
-async function fetchBusStop(stopCode) {
-  const url = `https://arrivelah2.busrouter.sg/?id=${stopCode}`;
-  const res  = await fetch(url);
-  if (!res.ok) throw new Error(`arrivelah ${res.status}`);
-  return res.json();
+function arrivalTxt(mins) {
+  if (mins == null) return '—';
+  if (mins <= 0)   return 'Arr';
+  if (mins === 1)  return '1 min';
+  return `${mins} min`;
+}
+function loadBadge(load) {
+  if (load === 'SEA') return '<span style="color:var(--danger)">●</span>';
+  if (load === 'SDA') return '<span style="color:var(--warning)">●</span>';
+  if (load === 'LSD') return '<span style="color:var(--seats-ok)">●</span>';
+  return '';
 }
 
 async function fetchLtaBus() {
@@ -2349,40 +2333,39 @@ async function fetchLtaBus() {
   const upd   = document.getElementById('ltaLastUpdated');
 
   if (!stops.length) {
-    if (el) el.innerHTML = `<div class="loading-text">Select bus stops in ⚙ Settings → Bus Stops</div>`;
+    if (el) el.innerHTML = `<div class="loading-text">Add stops in ⚙ Settings → Bus Stops</div>`;
     if (dot) dot.className = 'status-dot status-offline';
     return;
   }
 
-  if (el) el.innerHTML = `<div class="loading-text">Loading bus arrivals…</div>`;
-
   try {
-    const results = await Promise.all(stops.map(code => fetchBusStop(code)));
+    const results = await Promise.all(stops.map(async code => {
+      const res = await fetch(`https://arrivelah2.busrouter.sg/?id=${code}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      return { code, data: await res.json() };
+    }));
 
     let html = '<div class="public-bus-grid">';
-    results.forEach((data, i) => {
-      const code     = stops[i];
-      const stopInfo = PUBLIC_BUS_MAP[code];
-      const name     = stopInfo ? stopInfo.name : `Stop ${code}`;
-      const services = data.services || [];
+    results.forEach(({ code, data }) => {
+      const stop   = sgStopsDb?.[code];
+      const name   = stop ? stop[2] : `Stop ${code}`;
+      const svcs   = data.services || [];
 
       html += `<div class="pb-stop-block">
-        <div class="pb-stop-name">🚏 ${name} <span style="opacity:.5">(${code})</span></div>
+        <div class="pb-stop-name">🚏 ${name} <span style="opacity:.45;font-size:.6rem">${code}</span></div>
         <div class="pb-services">`;
 
-      if (!services.length) {
-        html += `<div style="color:var(--muted);font-size:.75rem;padding:4px 0">No services available</div>`;
+      if (!svcs.length) {
+        html += `<span style="color:var(--muted);font-size:.75rem">No services right now</span>`;
       } else {
-        services.forEach(svc => {
-          const next = svc.next;
-          const sub  = svc.subsequent;
-          const arr1 = fmtArrival(next?.duration_ms != null ? Math.round(next.duration_ms / 60000) : 99);
-          const arr2 = sub?.duration_ms != null ? fmtArrival(Math.round(sub.duration_ms / 60000)) : null;
+        svcs.forEach(svc => {
+          const m1 = fmtMins(svc.next?.duration_ms);
+          const m2 = fmtMins(svc.subsequent?.duration_ms);
           html += `<div class="pb-svc">
             <span class="pb-svc-no">${svc.no}</span>
             <div class="pb-times">
-              <span class="pb-time next ${arr1.cls} ${loadClass(next?.load)}">${loadLabel(next?.load)} ${arr1.text}</span>
-              ${arr2 ? `<span class="pb-time ${arr2.cls} ${loadClass(sub?.load)}">${loadLabel(sub?.load)} ${arr2.text}</span>` : ''}
+              <span class="pb-time ${arrivalCls(m1)}">${loadBadge(svc.next?.load)} ${arrivalTxt(m1)}</span>
+              ${m2 != null ? `<span class="pb-time ${arrivalCls(m2)}">${loadBadge(svc.subsequent?.load)} ${arrivalTxt(m2)}</span>` : ''}
             </div>
           </div>`;
         });
@@ -2396,8 +2379,8 @@ async function fetchLtaBus() {
     if (upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' });
 
   } catch (e) {
-    console.warn('LTA bus fetch error:', e.message);
-    if (el) el.innerHTML = `<div class="loading-text" style="color:var(--muted)">Bus data unavailable — check connection</div>`;
+    console.warn('Bus fetch error:', e.message);
+    if (el) el.innerHTML = `<div class="loading-text" style="color:var(--muted)">Bus data unavailable — ${e.message}</div>`;
     if (dot) dot.className = 'status-dot status-offline';
   }
 }
@@ -2406,8 +2389,8 @@ async function fetchLtaBus() {
 // APP INIT & REFRESH LOOP
 // ═══════════════════════════════════════════════════
 function startApp() {
-  if (clockInterval)    clearInterval(clockInterval);
-  if (refreshInterval)  clearInterval(refreshInterval);
+  if (clockInterval)      clearInterval(clockInterval);
+  if (refreshInterval)    clearInterval(refreshInterval);
   if (ltaRefreshInterval) clearInterval(ltaRefreshInterval);
 
   updateClock();
@@ -2429,6 +2412,7 @@ function startApp() {
 
 // ── First boot ──
 window.addEventListener('load', () => {
+  loadSgStops();   // preload stop DB in background
   startApp();
   spInit();
 });
