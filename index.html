@@ -3,18 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;
-    script-src 'self' 'unsafe-inline' 'unsafe-eval';
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-    font-src 'self' https://fonts.gstatic.com;
-    img-src 'self' data: blob: https://i.scdn.co https://mosaic.scdn.co https://*.scdn.co https://*.spotifycdn.com;
-    connect-src 'self'
-      https://accounts.spotify.com
-      https://api.spotify.com
-      https://api.data.gov.sg
-      https://arrivelah2.busrouter.sg;
-  " />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://api.data.gov.sg https://arrivelah2.busrouter.sg; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
   <title>NTU Smart Display</title>
   <style>
     /* Fallback font stack while Google Fonts loads (or on file://) */
@@ -1069,19 +1058,13 @@
     <div class="cfg-pane" id="pane-spotify">
       <div id="spSettingsStatus" style="margin-bottom:14px"></div>
 
-      <div id="spServerWarning" style="display:none" class="ntu-notice" style="margin-bottom:16px;background:rgba(255,107,53,.04);border-color:rgba(255,107,53,.25)">
-        <strong style="color:var(--accent2)">⚠️ File opened directly — server needed.</strong><br>
-        Run <code style="color:var(--accent)">start.command</code> (Mac) or <code style="color:var(--accent)">start.bat</code> (Windows),
-        then open the URL it prints in your browser. Spotify OAuth requires <code>http://</code>.
-      </div>
-
       <div class="field">
         <label>Spotify Client ID</label>
         <input type="text" id="cfgSpClientId" placeholder="e.g. 1a2b3c4d5e6f7890abcdef1234567890" autocomplete="off" />
         <small>
           1. Go to <strong>developer.spotify.com/dashboard</strong> → Create app<br>
           2. Under <strong>Redirect URIs</strong>, add exactly:<br>
-          <code id="spRedirectUriDisplay" style="color:var(--accent);font-size:.75rem;display:block;margin:5px 0 4px;padding:4px 6px;background:rgba(0,229,255,.06);border-radius:4px;word-break:break-all;user-select:all">—</code>
+          <code id="spRedirectUriDisplay" style="color:var(--accent);font-size:.75rem;display:block;margin:5px 0 4px;padding:4px 6px;background:rgba(0,229,255,.06);border-radius:4px;word-break:break-all;user-select:all">https://chenfenggoh.github.io/display/</code>
           3. Paste your Client ID above → Save → Connect
         </small>
       </div>
@@ -1538,9 +1521,9 @@ let spIsPlaying     = false;
 
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
 function spRedirectUri() {
-  // Hardcoded to match the local server. Must be added exactly in Spotify Dashboard.
-  // Spotify no longer allows localhost or file:// — 127.0.0.1 is required.
-  return 'http://127.0.0.1:8888/';
+  // Must match exactly what's in the Spotify Developer Dashboard.
+  // GitHub Pages serves this at the directory URL (no filename).
+  return 'https://chenfenggoh.github.io/display/';
 }
 
 async function pkceChallenge() {
@@ -1611,7 +1594,11 @@ async function spHandleCallback() {
         code_verifier: verifier,
       }),
     });
-    if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      const detail = errBody.error_description || errBody.error || res.status;
+      throw new Error(`${detail} (redirect_uri used: ${spRedirectUri()})`);
+    }
     const data = await res.json();
     spSaveTokens(data, clientId);
     localStorage.removeItem('sp_verifier');
@@ -1817,18 +1804,6 @@ function spUpdateSettingsPanel() {
   const connectBtn    = document.getElementById('spSettingsConnectBtn');
   const disconnectBtn = document.getElementById('spSettingsDisconnectBtn');
   const status        = document.getElementById('spSettingsStatus');
-  const uriDisplay    = document.getElementById('spRedirectUriDisplay');
-  const warning       = document.getElementById('spServerWarning');
-
-  const isFile = window.location.protocol === 'file:';
-
-  if (uriDisplay) {
-    uriDisplay.textContent = isFile
-      ? 'Run the local server first (start.command / start.bat), then reopen settings.'
-      : 'http://127.0.0.1:8888/';
-  }
-  if (warning) warning.style.display = isFile ? '' : 'none';
-
   if (!connectBtn) return;
 
   if (connected) {
@@ -1838,10 +1813,7 @@ function spUpdateSettingsPanel() {
   } else {
     connectBtn.style.display    = '';
     disconnectBtn.style.display = 'none';
-    connectBtn.disabled = isFile;
-    if (status) status.innerHTML = isFile
-      ? `<div style="color:var(--accent2);font-size:.8rem">⚠️ Open via local server to connect</div>`
-      : `<div style="color:var(--muted);font-size:.8rem">Not connected</div>`;
+    if (status) status.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Not connected</div>`;
   }
 }
 
@@ -1851,24 +1823,8 @@ async function spInit() {
   const clientIdInput = document.getElementById('cfgSpClientId');
   if (clientIdInput && cfg.spotifyClientId) clientIdInput.value = cfg.spotifyClientId;
 
-  // Warn immediately if opened as file:// — Spotify OAuth will not work
-  if (window.location.protocol === 'file:') {
-    document.getElementById('spotifyCard').innerHTML = `
-      <div class="sp-idle">
-        <div class="sp-idle-icon">⚠️</div>
-        <div class="sp-idle-text" style="color:var(--accent2)">
-          <strong>Run via the local server</strong><br>
-          <span style="font-size:.7rem">Double-click <strong>start.command</strong> (Mac) or <strong>start.bat</strong> (Windows),<br>
-          then open the address it shows in your browser.</span>
-        </div>
-      </div>`;
-    spUpdateSettingsPanel();
-    return;
-  }
-
   // Handle OAuth callback (code= in URL query string)
   if (window.location.search.includes('code=')) {
-    // Show loading state while exchanging token
     document.getElementById('spotifyCard').innerHTML = `
       <div class="sp-idle">
         <div class="sp-idle-icon">🎵</div>
