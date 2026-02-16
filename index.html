@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://arrivelah2.busrouter.sg https://data.busrouter.sg https://api.openweathermap.org; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://arrivelah2.busrouter.sg https://data.busrouter.sg https://raw.githubusercontent.com https://api.openweathermap.org http://api.openweathermap.org; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
   <title>NTU Smart Display</title>
   <style>
     /* Fallback font stack while Google Fonts loads (or on file://) */
@@ -1199,17 +1199,22 @@
 
     <!-- ── TAB: BUS STOPS ── -->
     <div class="cfg-pane active" id="pane-bus">
+      <div class="ntu-notice" style="margin-bottom:12px;background:rgba(0,229,255,.03);border-color:rgba(0,229,255,.15)">
+        <strong style="color:var(--accent)">🚌 Public Bus (LTA)</strong> — uses LTA bus stop codes.<br>
+        <strong style="color:var(--accent3)">🎓 NTU Shuttle</strong> — uses NTU stop names (set in NTU Shuttle tab).<br>
+        <small style="color:var(--muted)">These are separate systems with different stop IDs — even for the same physical location.</small>
+      </div>
       <div class="field" style="margin-bottom:8px">
-        <label>Your selected stops (up to 3)</label>
+        <label>Selected public bus stops (up to 3)</label>
         <div class="selected-stops-preview" id="selectedStopsPreview">
-          <span style="color:var(--muted);font-size:.75rem">No stops selected — pick from the list below</span>
+          <span style="color:var(--muted);font-size:.75rem">No stops selected — search below</span>
         </div>
-        <div class="sel-hint">Tap a stop to add. Tap again to remove. Up to 3 stops.</div>
+        <div class="sel-hint">Search any Singapore bus stop by name or 5-digit LTA stop code. Tap to add, tap again to remove.</div>
       </div>
       <div class="stop-search-wrap">
         <span class="stop-search-icon">🔍</span>
         <input class="stop-search" id="busStopSearchInput" type="text"
-          placeholder="Search by name, code, or bus number…"
+          placeholder="e.g. 'Boon Lay', '22009', 'Pioneer MRT'…"
           oninput="filterBusStops(this.value)" autocomplete="off" />
       </div>
       <div class="stop-list" id="busStopListContainer"></div>
@@ -2147,37 +2152,37 @@ function renderWeather({ temp, feels, hum, wind, desc, code, hi }) {
 }
 
 async function fetchWeather() {
-  const key = cfg.weatherKey;
+  const key = cfg.weatherKey ? cfg.weatherKey.trim() : '';
   const el  = document.getElementById('weatherContent');
   if (!key) {
     if (el) el.innerHTML = `<div class="sp-idle" style="padding:12px 0">
       <div class="sp-idle-icon">🌡️</div>
-      <div class="sp-idle-text">Add OpenWeatherMap API key in<br>⚙ Settings → API Keys</div>
+      <div class="sp-idle-text">Add your OpenWeatherMap API key<br>in ⚙ Settings → API Keys</div>
     </div>`;
     return;
   }
   try {
-    // NTU / Jurong West coordinates
-    const url = `https://api.openweathermap.org/data/2.5/weather?lat=1.3483&lon=103.6831&appid=${key}&units=metric`;
+    // Use city name query as primary — more reliable than lat/lon on free tier
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=Jurong+West,SG&appid=${key}&units=metric`;
     const res  = await fetch(url);
+    const body = await res.json();
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${res.status}`);
+      // OWM returns {"cod":401,"message":"Invalid API key..."} etc.
+      throw new Error(body.message || `Error ${res.status}`);
     }
-    const d    = await res.json();
-    const temp = d.main.temp;
-    const feels= d.main.feels_like;
-    const hum  = d.main.humidity;
-    const wind = (d.wind.speed * 3.6).toFixed(1);
-    const desc = d.weather[0].description.replace(/\b\w/g, c => c.toUpperCase());
-    const code = d.weather[0].id;
-    const hi   = wxHeatIndex(temp, hum);
+    const temp  = body.main.temp;
+    const feels = body.main.feels_like;
+    const hum   = body.main.humidity;
+    const wind  = (body.wind.speed * 3.6).toFixed(1);
+    const desc  = body.weather[0].description.replace(/\b\w/g, c => c.toUpperCase());
+    const code  = body.weather[0].id;
+    const hi    = wxHeatIndex(temp, hum);
     renderWeather({ temp, feels, hum, wind, desc, code, hi });
   } catch (e) {
     console.warn('Weather fetch error:', e.message);
     if (el) el.innerHTML = `<div class="sp-idle" style="padding:12px 0">
       <div class="sp-idle-icon">⚠️</div>
-      <div class="sp-idle-text" style="color:var(--accent2)">Weather error:<br><small>${e.message}</small></div>
+      <div class="sp-idle-text" style="color:var(--accent2)">Weather error:<br><small style="word-break:break-word">${e.message}</small></div>
     </div>`;
   }
 }
@@ -2192,11 +2197,11 @@ let sgStopsArr = [];    // [{ code, name, lat, lon }, ...]
 
 async function loadSgStops() {
   if (sgStopsDb) return;  // already loaded
-  const CACHE_KEY = 'sg_bus_stops_v1';
+  const CACHE_KEY = 'sg_bus_stops_v2';
   const CACHE_AGE = 24 * 60 * 60 * 1000; // 1 day
 
+  // Try sessionStorage cache first
   try {
-    // Try sessionStorage cache first
     const cached = sessionStorage.getItem(CACHE_KEY);
     if (cached) {
       const { ts, data } = JSON.parse(cached);
@@ -2208,18 +2213,27 @@ async function loadSgStops() {
     }
   } catch (_) {}
 
-  try {
-    const res  = await fetch('https://data.busrouter.sg/v1/stops.min.json');
-    if (!res.ok) throw new Error(`${res.status}`);
-    const data = await res.json();
-    sgStopsDb  = data;
-    sgStopsArr = Object.entries(data).map(([code, v]) => ({ code, lat: v[0], lon: v[1], name: v[2] }));
+  // Try multiple URLs — the correct path has /data/ in it
+  const URLS = [
+    'https://data.busrouter.sg/v1/data/stops.min.json',
+    'https://raw.githubusercontent.com/cheeaun/sgbusdata/main/data/v1/stops.min.json',
+  ];
+
+  for (const url of URLS) {
     try {
-      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+      const res  = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (typeof data !== 'object' || !Object.keys(data).length) continue;
+      sgStopsDb  = data;
+      sgStopsArr = Object.entries(data).map(([code, v]) => ({ code, lat: v[0], lon: v[1], name: v[2] }));
+      try {
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+      } catch (_) {}
+      return; // success
     } catch (_) {}
-  } catch (e) {
-    console.warn('Could not load SG bus stops:', e.message);
   }
+  console.warn('Could not load SG bus stops from any source');
 }
 
 function renderBusStopList(query = '') {
