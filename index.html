@@ -768,30 +768,74 @@
       text-overflow: ellipsis;
     }
 
-    /* Pinned playlist quick-launch buttons */
-    .sp-quick-playlists {
-      display: flex;
-      flex-wrap: wrap;
+    /* Playlist grid on card — used for both pinned and recent */
+    .sp-pl-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       gap: 5px;
-      margin-top: 8px;
+      margin-top: 6px;
     }
-    .sp-pl-btn {
-      background: rgba(255,255,255,.05);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 20px;
-      padding: 4px 10px;
-      font-size: .65rem;
+    .sp-pl-tile {
+      position: relative;
+      border-radius: 6px;
+      overflow: hidden;
       cursor: pointer;
+      aspect-ratio: 1;
+      background: var(--border);
+      border: 1px solid transparent;
+      transition: border-color .15s, transform .12s;
+    }
+    .sp-pl-tile:hover { border-color: #1db954; transform: scale(1.03); }
+    .sp-pl-tile.playing { border-color: #1db954; }
+    .sp-pl-tile img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .sp-pl-tile .sp-pl-tile-fallback {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+      background: rgba(255,255,255,.04);
+    }
+    .sp-pl-tile-label {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 12px 5px 4px;
+      font-size: .55rem;
+      color: #fff;
+      text-align: center;
       white-space: nowrap;
-      max-width: 130px;
       overflow: hidden;
       text-overflow: ellipsis;
-      transition: all .15s;
-      font-family: var(--font-body);
+      background: linear-gradient(transparent, rgba(0,0,0,.75));
+      line-height: 1.2;
     }
-    .sp-pl-btn:hover { border-color: #1db954; color: #1db954; background: rgba(29,185,84,.08); }
-    .sp-pl-btn.playing { border-color: #1db954; color: #1db954; background: rgba(29,185,84,.12); }
+    .sp-pl-tile-pin {
+      position: absolute;
+      top: 3px; right: 3px;
+      background: rgba(0,0,0,.55);
+      border: none;
+      border-radius: 50%;
+      width: 18px; height: 18px;
+      font-size: .6rem;
+      cursor: pointer;
+      color: #ccc;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0;
+      transition: opacity .15s;
+    }
+    .sp-pl-tile:hover .sp-pl-tile-pin { opacity: 1; }
+    .sp-pl-tile-pin.pinned { opacity: 1; color: #1db954; }
+
+    /* Section labels on card */
+    .sp-section-label {
+      font-size: .58rem;
+      color: var(--muted);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      margin: 8px 0 4px;
+    }
 
     /* Playlist list in settings */
     .sp-pl-list-item {
@@ -853,6 +897,33 @@
       font-family: var(--font-body);
     }
     .sp-recent-chip:hover { border-color: #1db954; color: #1db954; background: rgba(29,185,84,.08); }
+
+    .sp-overlay-section-label {
+      font-size: .62rem;
+      font-family: var(--font-mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 7px;
+    }
+
+    /* Card playlist rows — grid layout */
+    .sp-card-pl-row {
+      margin-top: 8px;
+    }
+    .sp-card-pl-label {
+      font-size: .58rem;
+      font-family: var(--font-mono);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .sp-quick-playlists {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
 
     /* Playback mode badge on card */
     .sp-mode-badge {
@@ -1991,8 +2062,9 @@ let spCurrentMs     = 0;   // local progress counter
 let spDurationMs    = 0;
 let spIsPlaying     = false;
 let spShuffleOn     = false;
-let spPlaylists     = [];   // cached user playlists [{id,name,images}]
-let spSeekingNow    = false; // debounce flag
+let spPlaylists     = [];   // cached user playlists [{id,name,img,tracks}]
+let spRecentIds     = [];   // cached recent playlist IDs (ordered, max 6)
+let spSeekingNow    = false;
 
 // Web Playback SDK
 let spSdkReady      = false;  // SDK script loaded
@@ -2104,6 +2176,7 @@ function spSaveTokens(data, clientId) {
     else    spSetModeBadge(false);
   });
   spLoadPlaylists();
+  spLoadRecents(); // pre-load recents for card display
 }
 
 async function spRefreshToken() {
@@ -2238,17 +2311,13 @@ function spRenderIdle(msg = '') {
 
 function spRenderNothing() {
   clearInterval(spProgressTimer);
-  const pins = cfg.spPinnedPlaylists || [];
-  const pinHtml = pins.length ? `
-    <div class="sp-quick-playlists">
-      ${pins.map(p => `<button class="sp-pl-btn" onclick="spPlayPlaylist('${p.id}')" title="${p.name}">▶ ${p.name}</button>`).join('')}
-    </div>` : '';
   document.getElementById('spotifyCard').innerHTML = `
     <div class="sp-nothing">Nothing playing right now</div>
-    ${pinHtml}`;
+    <div id="spCardPlaylists"></div>`;
   document.getElementById('spHeaderBtn').innerHTML =
     `<button class="sp-ctrl-btn" onclick="spOpenPlaylistOverlay()" title="Search & change playlist" style="font-size:.75rem;width:auto;border-radius:12px;padding:0 8px;gap:4px">🎵 Playlist</button>
     <button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
+  spRenderCardPlaylists();
 }
 
 function spRenderTrack(data) {
@@ -2262,21 +2331,13 @@ function spRenderTrack(data) {
   spShuffleOn   = data.shuffle_state || false;
 
   // Context (playlist name)
-  let contextHtml = '';
-  if (data.context?.type === 'playlist' && data.context.uri) {
-    const ctxId   = data.context.uri.split(':').pop();
-    const pinned  = (cfg.spPinnedPlaylists || []).find(p => p.id === ctxId);
-    const ctxName = pinned?.name || '▶ Playlist';
-    contextHtml = `<div class="sp-context">🎵 ${ctxName}</div>`;
-  }
-
-  // Pinned playlist quick-launch buttons
-  const pins = cfg.spPinnedPlaylists || [];
   const currentCtxId = data.context?.uri?.split(':').pop();
-  const pinHtml = pins.length ? `
-    <div class="sp-quick-playlists">
-      ${pins.map(p => `<button class="sp-pl-btn${p.id === currentCtxId ? ' playing' : ''}" onclick="spPlayPlaylist('${p.id}')" title="${p.name}">▶ ${p.name}</button>`).join('')}
-    </div>` : '';
+  let contextHtml = '';
+  if (data.context?.type === 'playlist' && currentCtxId) {
+    const pl = spPlaylists.find(p => p.id === currentCtxId)
+            || (cfg.spPinnedPlaylists || []).find(p => p.id === currentCtxId);
+    if (pl) contextHtml = `<div class="sp-context">🎵 ${pl.name}</div>`;
+  }
 
   document.getElementById('spotifyCard').innerHTML = `
     <div class="sp-now-playing">
@@ -2306,11 +2367,14 @@ function spRenderTrack(data) {
         </div>
       </div>
     </div>
-    ${pinHtml}`;
+    <div id="spCardPlaylists"></div>`;
 
   document.getElementById('spHeaderBtn').innerHTML =
     `<button class="sp-ctrl-btn" onclick="spOpenPlaylistOverlay()" title="Search & change playlist" style="font-size:.75rem;width:auto;border-radius:12px;padding:0 8px">🎵 Playlist</button>
     <button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
+
+  // Render playlist rows after DOM is ready
+  spRenderCardPlaylists(currentCtxId);
 }
 
 function spUpdateProgress() {
@@ -2430,15 +2494,21 @@ async function spOpenPlaylistOverlay() {
   overlay.style.display = 'flex';
   document.getElementById('spOverlaySearch').value = '';
 
-  // Render list immediately from cache
+  // Render pinned immediately (sync, from config)
+  spRenderOverlayPinned();
+
+  // Render all-list immediately from cache (may be empty, shows loading msg)
   spRenderOverlayList('');
 
-  // Load recents
+  // Load playlists if not cached yet, then re-render both sections
+  if (!spPlaylists.length) {
+    await spLoadPlaylists();
+    spRenderOverlayPinned();
+    spRenderOverlayList('');
+  }
+
+  // Load recents (async — updates its section when done)
   spLoadRecents();
-
-  // Load/refresh playlists if needed
-  if (!spPlaylists.length) await spLoadPlaylists();
-  spRenderOverlayList('');
 }
 
 function spClosePlaylistOverlay() {
@@ -2448,66 +2518,151 @@ function spClosePlaylistOverlay() {
 
 function spOverlayFilter(q) { spRenderOverlayList(q); }
 
-function spRenderOverlayList(query) {
-  const container = document.getElementById('spOverlayList');
+// Section 1: Pinned (in overlay — click row toggles pin, click play button plays)
+function spRenderOverlayPinned() {
+  const container = document.getElementById('spOverlayPinnedList');
   if (!container) return;
-  const q = query.trim().toLowerCase();
-  const pinned = new Set((cfg.spPinnedPlaylists || []).map(p => p.id));
+  const pins = cfg.spPinnedPlaylists || [];
 
-  const results = q
-    ? spPlaylists.filter(p => p.name.toLowerCase().includes(q))
-    : [...spPlaylists].sort((a,b) => (pinned.has(b.id)?1:0) - (pinned.has(a.id)?1:0));
-
-  if (!results.length) {
-    container.innerHTML = `<div style="padding:12px;text-align:center;color:var(--muted);font-size:.78rem">${spPlaylists.length ? 'No matches' : 'Loading playlists…'}</div>`;
+  if (!pins.length && !spPlaylists.length) {
+    container.innerHTML = `<div style="color:var(--muted);font-size:.72rem;padding:4px 0">Connect and load playlists to pin favourites.</div>`;
     return;
   }
-  container.innerHTML = results.slice(0, 100).map(p => {
-    const isPinned = pinned.has(p.id);
-    return `<div class="sp-pl-list-item${isPinned ? ' pinned' : ''}"
-        onclick="spPlayPlaylist('${p.id}');spClosePlaylistOverlay()">
-      ${p.img ? `<img class="sp-pl-img" src="${p.img}" loading="lazy">` : `<div class="sp-pl-img" style="display:flex;align-items:center;justify-content:center;font-size:.9rem">🎵</div>`}
-      <span class="sp-pl-name">${p.name}${isPinned ? ' <span style="color:#1db954;font-size:.6rem">★</span>' : ''}</span>
-    </div>`;
-  }).join('');
+  if (!pins.length) {
+    container.innerHTML = `<div style="color:var(--muted);font-size:.72rem;padding:4px 0">None pinned yet — click ★ on any playlist below to pin it.</div>`;
+    return;
+  }
+
+  container.innerHTML = `<div style="display:flex;flex-direction:column;gap:2px">` +
+    pins.map(p => {
+      const pl = spPlaylists.find(x => x.id === p.id) || p;
+      return `<div class="sp-pl-list-item pinned" style="border-radius:6px">
+        <button onclick="spPlayPlaylist('${p.id}');spClosePlaylistOverlay()" style="background:none;border:none;color:#1db954;cursor:pointer;font-size:.85rem;padding:0 4px;flex-shrink:0" title="Play">▶</button>
+        ${pl.img ? `<img class="sp-pl-img" src="${pl.img}" loading="lazy">` : `<div class="sp-pl-img" style="display:flex;align-items:center;justify-content:center;font-size:.8rem">🎵</div>`}
+        <span class="sp-pl-name">${pl.name}</span>
+        <button onclick="spTogglePin('${p.id}','${p.name.replace(/'/g,"\\'")}');spRenderOverlayPinned();spRenderOverlayList(document.getElementById('spOverlaySearch').value)"
+          style="background:none;border:none;color:#1db954;cursor:pointer;font-size:.85rem;padding:0 4px;flex-shrink:0" title="Unpin">★</button>
+      </div>`;
+    }).join('') + `</div>`;
 }
 
+// Section 2: Recently played (in overlay — shows 6 from API)
 async function spLoadRecents() {
-  const container = document.getElementById('spRecentList');
+  const container = document.getElementById('spOverlayRecentList');
   if (!container) return;
   const token = await spGetToken().catch(() => null);
   if (!token) { container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">Not connected</span>`; return; }
+
   try {
-    // recently-played gives us tracks, but we want playlist contexts
-    const res  = await fetch(`${SP_API_BASE}/me/player/recently-played?limit=50&type=track`, {
+    const res  = await fetch(`${SP_API_BASE}/me/player/recently-played?limit=50`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const data = await res.json();
     const seen = new Set();
-    const contexts = (data.items || [])
+    spRecentIds = (data.items || [])
       .filter(i => i.context?.type === 'playlist')
       .reduce((acc, i) => {
         const id = i.context.uri.split(':').pop();
         if (!seen.has(id)) { seen.add(id); acc.push(id); }
         return acc;
-      }, []).slice(0, 8);
+      }, []).slice(0, 6);
 
-    if (!contexts.length) {
-      container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">No recent playlists</span>`;
+    if (!spRecentIds.length) {
+      container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">No recent playlists found</span>`;
+      // Also refresh card recents row
+      spRenderCardPlaylists();
       return;
     }
-    // Match against loaded playlists (already have names/images)
-    const chips = contexts.map(id => {
-      const pl = spPlaylists.find(p => p.id === id) || { id, name: id };
-      return `<button class="sp-recent-chip" onclick="spPlayPlaylist('${pl.id}');spClosePlaylistOverlay()" title="${pl.name}">▶ ${pl.name}</button>`;
-    });
-    container.innerHTML = chips.join('');
+
+    // Render in overlay
+    const pinnedIds = new Set((cfg.spPinnedPlaylists || []).map(p => p.id));
+    container.innerHTML = `<div style="display:flex;flex-direction:column;gap:2px">` +
+      spRecentIds.map(id => {
+        const pl = spPlaylists.find(p => p.id === id) || { id, name: id, img: '' };
+        const isPinned = pinnedIds.has(id);
+        return `<div class="sp-pl-list-item" style="border-radius:6px">
+          <button onclick="spPlayPlaylist('${id}');spClosePlaylistOverlay()" style="background:none;border:none;color:#1db954;cursor:pointer;font-size:.85rem;padding:0 4px;flex-shrink:0" title="Play">▶</button>
+          ${pl.img ? `<img class="sp-pl-img" src="${pl.img}" loading="lazy">` : `<div class="sp-pl-img" style="display:flex;align-items:center;justify-content:center;font-size:.8rem">🕐</div>`}
+          <span class="sp-pl-name">${pl.name}</span>
+          <button onclick="spTogglePin('${id}','${pl.name.replace(/'/g,"\\'")}');spRenderOverlayPinned();spRenderOverlayList(document.getElementById('spOverlaySearch').value);this.textContent=((cfg.spPinnedPlaylists||[]).some(p=>p.id==='${id}')?'★':'☆')"
+            style="background:none;border:none;color:${isPinned?'#1db954':'var(--muted)'};cursor:pointer;font-size:.85rem;padding:0 4px;flex-shrink:0" title="${isPinned?'Unpin':'Pin'}">${isPinned?'★':'☆'}</button>
+        </div>`;
+      }).join('') + `</div>`;
+
+    // Also update the card's recent row
+    spRenderCardPlaylists();
+
   } catch (e) {
-    container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">—</span>`;
+    container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">Could not load recents</span>`;
   }
 }
 
-// ─── Playback controls ────────────────────────────────────────────────────────
+// Section 3: Search all playlists (in overlay)
+function spRenderOverlayList(query) {
+  const container = document.getElementById('spOverlayList');
+  if (!container) return;
+  const q       = query.trim().toLowerCase();
+  const pins    = new Set((cfg.spPinnedPlaylists || []).map(p => p.id));
+  const recents = new Set(spRecentIds);
+
+  const results = q
+    ? spPlaylists.filter(p => p.name.toLowerCase().includes(q))
+    : [...spPlaylists].sort((a, b) => {
+        const scoreA = (pins.has(a.id) ? 2 : 0) + (recents.has(a.id) ? 1 : 0);
+        const scoreB = (pins.has(b.id) ? 2 : 0) + (recents.has(b.id) ? 1 : 0);
+        return scoreB - scoreA;
+      });
+
+  if (!results.length) {
+    container.innerHTML = `<div style="padding:12px;text-align:center;color:var(--muted);font-size:.78rem">${spPlaylists.length ? (q ? `No matches for "${query}"` : 'No playlists found') : 'Loading playlists…'}</div>`;
+    return;
+  }
+
+  container.innerHTML = results.slice(0, 100).map(p => {
+    const isPinned = pins.has(p.id);
+    return `<div class="sp-pl-list-item" onclick="spPlayPlaylist('${p.id}');spClosePlaylistOverlay()">
+      ${p.img ? `<img class="sp-pl-img" src="${p.img}" loading="lazy">` : `<div class="sp-pl-img" style="display:flex;align-items:center;justify-content:center;font-size:.8rem">🎵</div>`}
+      <span class="sp-pl-name">${p.name}</span>
+      <button onclick="event.stopPropagation();spTogglePin('${p.id}','${p.name.replace(/'/g,"\\'")}');spRenderOverlayPinned();spRenderOverlayList(document.getElementById('spOverlaySearch').value);this.style.color=((cfg.spPinnedPlaylists||[]).some(p=>p.id==='${p.id}')?'#1db954':'var(--muted)')"
+        style="background:none;border:none;color:${isPinned?'#1db954':'var(--muted)'};cursor:pointer;font-size:.85rem;padding:0 6px;flex-shrink:0" title="${isPinned?'Unpin':'Pin'}">${isPinned?'★':'☆'}</button>
+    </div>`;
+  }).join('');
+}
+
+// ─── Card playlist rows (pinned + recent, shown on Now Playing card) ──────────
+function spRenderCardPlaylists(currentCtxId) {
+  const cardEl = document.getElementById('spCardPlaylists');
+  if (!cardEl) return;
+
+  const pins    = cfg.spPinnedPlaylists || [];
+  const recents = spRecentIds
+    .map(id => spPlaylists.find(p => p.id === id) || { id, name: id, img: '' })
+    .filter(Boolean);
+
+  let html = '';
+
+  if (pins.length) {
+    html += `<div class="sp-card-pl-row">
+      <div class="sp-card-pl-label">★ Pinned</div>
+      <div class="sp-quick-playlists">
+        ${pins.map(p => `<button class="sp-pl-btn${p.id === currentCtxId ? ' playing' : ''}"
+          onclick="spPlayPlaylist('${p.id}')" title="${p.name}">▶ ${p.name}</button>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (recents.length) {
+    html += `<div class="sp-card-pl-row">
+      <div class="sp-card-pl-label">🕐 Recent</div>
+      <div class="sp-quick-playlists">
+        ${recents.map(p => `<button class="sp-pl-btn${p.id === currentCtxId ? ' playing' : ''}"
+          onclick="spPlayPlaylist('${p.id}')" title="${p.name}">▶ ${p.name}</button>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  cardEl.innerHTML = html;
+}
 async function spApiPost(path, body) {
   const token = await spGetToken().catch(() => null);
   if (!token) return false;
@@ -2685,8 +2840,9 @@ function spTogglePin(id, name) {
     pins.splice(idx, 1);
   } else {
     if (pins.length >= 6) {
-      const chip = document.getElementById('spPinnedChips');
-      if (chip) { chip.style.outline = '1px solid var(--danger)'; setTimeout(() => chip.style.outline = '', 800); }
+      // Flash the pinned section header in overlay if open
+      const hdr = document.querySelector('#spPlaylistPanel .sp-overlay-section-label');
+      if (hdr) { hdr.style.color = 'var(--danger)'; setTimeout(() => hdr.style.color = '', 800); }
       return;
     }
     pins.push({ id, name });
@@ -2695,6 +2851,7 @@ function spTogglePin(id, name) {
   localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
   spRenderPinnedChips();
   spRenderPlaylistList(document.getElementById('spPlaylistSearch')?.value || '');
+  spRenderCardPlaylists(); // update card rows
 }
 
 function spRenderPinnedChips() {
@@ -2765,8 +2922,9 @@ async function spInit() {
     } else {
       spSetModeBadge(false); // controller-only
     }
-    // Pre-load playlists for overlay
+    // Pre-load playlists and recents for overlay + card
     spLoadPlaylists();
+    spLoadRecents();
   } else {
     spRenderConnectPrompt();
   }
@@ -3320,29 +3478,37 @@ window.addEventListener('load', () => {
 <!-- ═══ SPOTIFY PLAYLIST OVERLAY ═══ -->
 <div id="spPlaylistOverlay" style="display:none" onclick="if(event.target===this)spClosePlaylistOverlay()">
   <div id="spPlaylistPanel">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <span style="font-family:var(--font-display);font-size:.9rem;color:var(--accent)">🎵 Change Playlist</span>
-      <button onclick="spClosePlaylistOverlay()" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;line-height:1">✕</button>
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;margin-bottom:14px">
+      <span style="font-family:var(--font-display);font-size:.88rem;color:var(--accent);letter-spacing:.04em">🎵 Change Playlist</span>
+      <button onclick="spClosePlaylistOverlay()" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;line-height:1;padding:2px 6px">✕</button>
     </div>
 
-    <!-- Recents section -->
-    <div style="margin-bottom:12px">
-      <div style="font-size:.65rem;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">Recently Played</div>
-      <div id="spRecentList" style="display:flex;flex-wrap:wrap;gap:5px">
+    <!-- Section 1: Pinned -->
+    <div style="margin-bottom:14px">
+      <div class="sp-overlay-section-label">★ Pinned <span style="font-weight:400;color:var(--muted)">(up to 6 · click to toggle)</span></div>
+      <div id="spOverlayPinnedList"></div>
+    </div>
+
+    <!-- Section 2: Recently Played -->
+    <div style="margin-bottom:14px">
+      <div class="sp-overlay-section-label">🕐 Recently Played</div>
+      <div id="spOverlayRecentList">
         <span style="color:var(--muted);font-size:.72rem">Loading…</span>
       </div>
     </div>
 
-    <!-- Search -->
+    <!-- Section 3: Search all playlists -->
+    <div class="sp-overlay-section-label" style="margin-bottom:6px">🔍 All Playlists</div>
     <div class="stop-search-wrap" style="margin-bottom:8px">
       <span class="stop-search-icon">🔍</span>
       <input class="stop-search" id="spOverlaySearch" type="text"
         placeholder="Search all playlists…"
         oninput="spOverlayFilter(this.value)" autocomplete="off" />
     </div>
+    <div id="spOverlayList" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
 
-    <!-- Playlist list -->
-    <div id="spOverlayList" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
   </div>
 </div>
 </body>
