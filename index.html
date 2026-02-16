@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://arrivelah2.busrouter.sg https://data.busrouter.sg https://raw.githubusercontent.com https://api.openweathermap.org http://api.openweathermap.org; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com wss://*.spotify.com https://arrivelah2.busrouter.sg https://data.busrouter.sg https://raw.githubusercontent.com https://api.openweathermap.org http://api.openweathermap.org; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; media-src blob: https://*.scdn.co;" />
   <title>NTU Smart Display</title>
   <style>
     /* Fallback font stack while Google Fonts loads (or on file://) */
@@ -816,6 +816,56 @@
     .sp-pl-list-item .sp-pl-name { flex: 1; font-size: .78rem; color: var(--text); }
     .sp-pl-list-item .sp-pl-check { font-size: .75rem; color: #1db954; width: 16px; text-align: center; }
 
+    /* Playlist search overlay */
+    #spPlaylistOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.65);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    #spPlaylistPanel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      width: min(420px, 92vw);
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,.6);
+    }
+    .sp-recent-chip {
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: .65rem;
+      cursor: pointer;
+      color: var(--text);
+      white-space: nowrap;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all .15s;
+      font-family: var(--font-body);
+    }
+    .sp-recent-chip:hover { border-color: #1db954; color: #1db954; background: rgba(29,185,84,.08); }
+
+    /* Playback mode badge on card */
+    .sp-mode-badge {
+      font-size: .58rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-family: var(--font-mono);
+      letter-spacing: .04em;
+      display: inline-block;
+    }
+    .sp-mode-local  { background: rgba(29,185,84,.15); color: #1db954; border: 1px solid rgba(29,185,84,.3); }
+    .sp-mode-remote { background: rgba(0,229,255,.1);  color: var(--accent); border: 1px solid var(--border); }
+
     /* Config panel */
     .config-btn {
       position: fixed;
@@ -1190,6 +1240,9 @@
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   </style>
 </head>
+<!-- Spotify Web Playback SDK — loaded async, only used if DRM is available -->
+<script>window.onSpotifyWebPlaybackSDKReady = () => {};</script>
+<script src="https://sdk.scdn.co/spotify-player.js" async></script>
 <body>
 
 <div class="orb orb-1"></div>
@@ -1241,9 +1294,10 @@
 
     <!-- SPOTIFY NOW PLAYING (col 3, row 1) -->
     <div class="card" style="grid-column:3; grid-row:1">
-      <div class="card-title" style="justify-content:space-between">
+      <div class="card-title" style="justify-content:space-between;gap:6px">
         <span>Now Playing</span>
-        <span id="spHeaderBtn"></span>
+        <span id="spModeBadge"></span>
+        <span id="spHeaderBtn" style="display:flex;gap:6px;align-items:center"></span>
       </div>
       <div class="spotify-card" id="spotifyCard">
         <div class="sp-idle">
@@ -1925,7 +1979,7 @@ function fetchNtuBus() {
 // developer.spotify.com and pastes the Client ID.
 // ═══════════════════════════════════════════════════
 
-const SP_SCOPES      = 'user-read-currently-playing user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read';
+const SP_SCOPES      = 'user-read-currently-playing user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read streaming user-read-email user-read-private';
 const SP_API_BASE    = 'https://api.spotify.com/v1';
 const SP_AUTH_URL    = 'https://accounts.spotify.com/authorize';
 const SP_TOKEN_URL   = 'https://accounts.spotify.com/api/token';
@@ -1939,6 +1993,12 @@ let spIsPlaying     = false;
 let spShuffleOn     = false;
 let spPlaylists     = [];   // cached user playlists [{id,name,images}]
 let spSeekingNow    = false; // debounce flag
+
+// Web Playback SDK
+let spSdkReady      = false;  // SDK script loaded
+let spPlayer        = null;   // Spotify.Player instance
+let spDeviceId      = null;   // this browser's device ID
+let spLocalMode     = false;  // true = playing audio here; false = remote controller
 
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
 function spRedirectUri() {
@@ -2038,6 +2098,12 @@ function spSaveTokens(data, clientId) {
   cfg.spotifyClientId = clientId || cfg.spotifyClientId;
   localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
   spStartPolling();
+  // Try SDK after successful auth
+  spDetectDrm().then(ok => {
+    if (ok) spInitSdk(data.access_token);
+    else    spSetModeBadge(false);
+  });
+  spLoadPlaylists();
 }
 
 async function spRefreshToken() {
@@ -2077,6 +2143,11 @@ function spotifyLogout() {
   localStorage.removeItem('sp_token_expiry');
   clearInterval(spPollInterval);
   clearInterval(spProgressTimer);
+  if (spPlayer) { spPlayer.disconnect(); spPlayer = null; }
+  spDeviceId  = null;
+  spLocalMode = false;
+  spSetModeBadge(false);
+  document.getElementById('spModeBadge').innerHTML = '';
   spRenderIdle('Disconnected');
   spUpdateSettingsPanel();
 }
@@ -2176,7 +2247,8 @@ function spRenderNothing() {
     <div class="sp-nothing">Nothing playing right now</div>
     ${pinHtml}`;
   document.getElementById('spHeaderBtn').innerHTML =
-    `<button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
+    `<button class="sp-ctrl-btn" onclick="spOpenPlaylistOverlay()" title="Search & change playlist" style="font-size:.75rem;width:auto;border-radius:12px;padding:0 8px;gap:4px">🎵 Playlist</button>
+    <button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
 }
 
 function spRenderTrack(data) {
@@ -2237,7 +2309,8 @@ function spRenderTrack(data) {
     ${pinHtml}`;
 
   document.getElementById('spHeaderBtn').innerHTML =
-    `<button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
+    `<button class="sp-ctrl-btn" onclick="spOpenPlaylistOverlay()" title="Search & change playlist" style="font-size:.75rem;width:auto;border-radius:12px;padding:0 8px">🎵 Playlist</button>
+    <button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
 }
 
 function spUpdateProgress() {
@@ -2247,6 +2320,191 @@ function spUpdateProgress() {
     fill.style.width = Math.min(100, (spCurrentMs / spDurationMs) * 100) + '%';
   }
   if (time) time.textContent = spFmtTime(spCurrentMs);
+}
+
+// ─── DRM detection & Web Playback SDK ────────────────────────────────────────
+async function spDetectDrm() {
+  // Check for Widevine (required by Spotify Web Playback SDK)
+  if (!navigator.requestMediaKeySystemAccess) return false;
+  try {
+    await navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{
+      initDataTypes: ['cenc'],
+      videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.42E01E"' }],
+      audioCapabilities: [{ contentType: 'audio/mp4; codecs="mp4a.40.2"' }],
+    }]);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function spInitSdk(token) {
+  // Wait for SDK to be loaded (injected async in <head>)
+  const waitForSdk = (ms = 8000) => new Promise((res, rej) => {
+    if (window.Spotify?.Player) return res();
+    let t = 0;
+    const i = setInterval(() => {
+      if (window.Spotify?.Player) { clearInterval(i); res(); }
+      t += 200;
+      if (t > ms) { clearInterval(i); rej(new Error('SDK timeout')); }
+    }, 200);
+  });
+
+  try {
+    await waitForSdk();
+    spPlayer = new window.Spotify.Player({
+      name: 'NTU Smart Display',
+      getOAuthToken: async cb => cb(await spGetToken()),
+      volume: 0.8,
+    });
+
+    spPlayer.addListener('ready', ({ device_id }) => {
+      spDeviceId  = device_id;
+      spLocalMode = true;
+      spSetModeBadge(true);
+      console.log('Spotify SDK ready, device:', device_id);
+    });
+
+    spPlayer.addListener('not_ready', () => {
+      spDeviceId  = null;
+      spLocalMode = false;
+      spSetModeBadge(false);
+    });
+
+    spPlayer.addListener('player_state_changed', state => {
+      if (!state) return;
+      spIsPlaying  = !state.paused;
+      spCurrentMs  = state.position;
+      spDurationMs = state.duration;
+      spShuffleOn  = state.shuffle;
+      // Update UI from local state (faster than polling)
+      spUpdateProgress();
+      const playBtn = document.getElementById('spPlayBtn');
+      if (playBtn) playBtn.textContent = spIsPlaying ? '⏸' : '▶';
+      if (spIsPlaying) {
+        clearInterval(spProgressTimer);
+        spProgressTimer = setInterval(() => {
+          spCurrentMs = Math.min(spCurrentMs + 1000, spDurationMs);
+          spUpdateProgress();
+        }, 1000);
+      } else {
+        clearInterval(spProgressTimer);
+      }
+    });
+
+    spPlayer.addListener('initialization_error', ({ message }) => {
+      console.warn('SDK init error:', message);
+      spLocalMode = false; spSetModeBadge(false);
+    });
+    spPlayer.addListener('authentication_error', ({ message }) => {
+      console.warn('SDK auth error:', message);
+    });
+    spPlayer.addListener('account_error', ({ message }) => {
+      // Premium required for SDK
+      console.warn('SDK account error (Premium needed):', message);
+      spLocalMode = false; spSetModeBadge(false);
+    });
+
+    await spPlayer.connect();
+  } catch (e) {
+    console.warn('SDK failed, controller-only mode:', e.message);
+    spLocalMode = false;
+    spSetModeBadge(false);
+  }
+}
+
+function spSetModeBadge(local) {
+  const el = document.getElementById('spModeBadge');
+  if (!el) return;
+  if (local) {
+    el.innerHTML = `<span class="sp-mode-badge sp-mode-local">▶ Local Audio</span>`;
+  } else {
+    el.innerHTML = `<span class="sp-mode-badge sp-mode-remote">⇌ Controller</span>`;
+  }
+}
+
+// ─── Playlist overlay ────────────────────────────────────────────────────────
+async function spOpenPlaylistOverlay() {
+  const overlay = document.getElementById('spPlaylistOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  document.getElementById('spOverlaySearch').value = '';
+
+  // Render list immediately from cache
+  spRenderOverlayList('');
+
+  // Load recents
+  spLoadRecents();
+
+  // Load/refresh playlists if needed
+  if (!spPlaylists.length) await spLoadPlaylists();
+  spRenderOverlayList('');
+}
+
+function spClosePlaylistOverlay() {
+  const overlay = document.getElementById('spPlaylistOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function spOverlayFilter(q) { spRenderOverlayList(q); }
+
+function spRenderOverlayList(query) {
+  const container = document.getElementById('spOverlayList');
+  if (!container) return;
+  const q = query.trim().toLowerCase();
+  const pinned = new Set((cfg.spPinnedPlaylists || []).map(p => p.id));
+
+  const results = q
+    ? spPlaylists.filter(p => p.name.toLowerCase().includes(q))
+    : [...spPlaylists].sort((a,b) => (pinned.has(b.id)?1:0) - (pinned.has(a.id)?1:0));
+
+  if (!results.length) {
+    container.innerHTML = `<div style="padding:12px;text-align:center;color:var(--muted);font-size:.78rem">${spPlaylists.length ? 'No matches' : 'Loading playlists…'}</div>`;
+    return;
+  }
+  container.innerHTML = results.slice(0, 100).map(p => {
+    const isPinned = pinned.has(p.id);
+    return `<div class="sp-pl-list-item${isPinned ? ' pinned' : ''}"
+        onclick="spPlayPlaylist('${p.id}');spClosePlaylistOverlay()">
+      ${p.img ? `<img class="sp-pl-img" src="${p.img}" loading="lazy">` : `<div class="sp-pl-img" style="display:flex;align-items:center;justify-content:center;font-size:.9rem">🎵</div>`}
+      <span class="sp-pl-name">${p.name}${isPinned ? ' <span style="color:#1db954;font-size:.6rem">★</span>' : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+async function spLoadRecents() {
+  const container = document.getElementById('spRecentList');
+  if (!container) return;
+  const token = await spGetToken().catch(() => null);
+  if (!token) { container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">Not connected</span>`; return; }
+  try {
+    // recently-played gives us tracks, but we want playlist contexts
+    const res  = await fetch(`${SP_API_BASE}/me/player/recently-played?limit=50&type=track`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    const seen = new Set();
+    const contexts = (data.items || [])
+      .filter(i => i.context?.type === 'playlist')
+      .reduce((acc, i) => {
+        const id = i.context.uri.split(':').pop();
+        if (!seen.has(id)) { seen.add(id); acc.push(id); }
+        return acc;
+      }, []).slice(0, 8);
+
+    if (!contexts.length) {
+      container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">No recent playlists</span>`;
+      return;
+    }
+    // Match against loaded playlists (already have names/images)
+    const chips = contexts.map(id => {
+      const pl = spPlaylists.find(p => p.id === id) || { id, name: id };
+      return `<button class="sp-recent-chip" onclick="spPlayPlaylist('${pl.id}');spClosePlaylistOverlay()" title="${pl.name}">▶ ${pl.name}</button>`;
+    });
+    container.innerHTML = chips.join('');
+  } catch (e) {
+    container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">—</span>`;
+  }
 }
 
 // ─── Playback controls ────────────────────────────────────────────────────────
@@ -2276,7 +2534,10 @@ async function spApiAction(path) {
 async function spTogglePlay() {
   const btn = document.getElementById('spPlayBtn');
   if (btn) btn.disabled = true;
-  if (spIsPlaying) {
+  if (spPlayer && spLocalMode) {
+    // Use local SDK for instant response
+    await spPlayer.togglePlay();
+  } else if (spIsPlaying) {
     await fetch(`${SP_API_BASE}/me/player/pause`, {
       method: 'PUT', headers: { 'Authorization': `Bearer ${await spGetToken()}` }
     });
@@ -2293,20 +2554,31 @@ async function spTogglePlay() {
     }, 1000);
   }
   if (btn) { btn.textContent = spIsPlaying ? '⏸' : '▶'; btn.disabled = false; }
-  setTimeout(fetchNowPlaying, 600);
+  if (!spLocalMode) setTimeout(fetchNowPlaying, 600);
 }
 
 async function spNext() {
-  await spApiAction('/me/player/next');
+  if (spPlayer && spLocalMode) {
+    await spPlayer.nextTrack();
+  } else {
+    await spApiAction('/me/player/next');
+  }
   setTimeout(fetchNowPlaying, 600);
 }
 
 async function spPrev() {
-  // If > 3 seconds in, restart track; else go truly previous
-  if (spCurrentMs > 3000) {
-    await spApiPost('/me/player/seek?position_ms=0');
+  if (spPlayer && spLocalMode) {
+    if (spCurrentMs > 3000) {
+      await spPlayer.seek(0);
+    } else {
+      await spPlayer.previousTrack();
+    }
   } else {
-    await spApiAction('/me/player/previous');
+    if (spCurrentMs > 3000) {
+      await spApiPost('/me/player/seek?position_ms=0');
+    } else {
+      await spApiAction('/me/player/previous');
+    }
   }
   setTimeout(fetchNowPlaying, 600);
 }
@@ -2322,23 +2594,32 @@ async function spToggleShuffle() {
 async function spSeekClick(e) {
   if (!spDurationMs || spSeekingNow) return;
   spSeekingNow = true;
-  const bar  = e.currentTarget;
-  const pct  = e.offsetX / bar.offsetWidth;
+  const bar   = e.currentTarget;
+  const pct   = e.offsetX / bar.offsetWidth;
   const posMs = Math.round(pct * spDurationMs);
   spCurrentMs = posMs;
   spUpdateProgress();
-  await spApiPost(`/me/player/seek?position_ms=${posMs}`);
+  if (spPlayer && spLocalMode) {
+    await spPlayer.seek(posMs);
+  } else {
+    await spApiPost(`/me/player/seek?position_ms=${posMs}`);
+  }
   spSeekingNow = false;
-  setTimeout(fetchNowPlaying, 800);
+  if (!spLocalMode) setTimeout(fetchNowPlaying, 800);
 }
 
 async function spPlayPlaylist(playlistId) {
   const token = await spGetToken().catch(() => null);
   if (!token) return;
-  await fetch(`${SP_API_BASE}/me/player/play`, {
+  const body = { context_uri: `spotify:playlist:${playlistId}` };
+  // If local SDK device is ready, target it explicitly
+  const url = spDeviceId
+    ? `${SP_API_BASE}/me/player/play?device_id=${spDeviceId}`
+    : `${SP_API_BASE}/me/player/play`;
+  await fetch(url, {
     method: 'PUT',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ context_uri: `spotify:playlist:${playlistId}` }),
+    body: JSON.stringify(body),
   });
   spSetPollRate(true);
   setTimeout(fetchNowPlaying, 800);
@@ -2477,6 +2758,15 @@ async function spInit() {
   const token = await spGetToken().catch(() => null);
   if (token) {
     spStartPolling();
+    // Attempt Web Playback SDK — check DRM first
+    const drmOk = await spDetectDrm();
+    if (drmOk) {
+      spInitSdk(token); // non-blocking — badge updates when ready
+    } else {
+      spSetModeBadge(false); // controller-only
+    }
+    // Pre-load playlists for overlay
+    spLoadPlaylists();
   } else {
     spRenderConnectPrompt();
   }
@@ -3026,5 +3316,34 @@ window.addEventListener('load', () => {
   spInit();
 });
 </script>
+
+<!-- ═══ SPOTIFY PLAYLIST OVERLAY ═══ -->
+<div id="spPlaylistOverlay" style="display:none" onclick="if(event.target===this)spClosePlaylistOverlay()">
+  <div id="spPlaylistPanel">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-family:var(--font-display);font-size:.9rem;color:var(--accent)">🎵 Change Playlist</span>
+      <button onclick="spClosePlaylistOverlay()" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <!-- Recents section -->
+    <div style="margin-bottom:12px">
+      <div style="font-size:.65rem;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px">Recently Played</div>
+      <div id="spRecentList" style="display:flex;flex-wrap:wrap;gap:5px">
+        <span style="color:var(--muted);font-size:.72rem">Loading…</span>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="stop-search-wrap" style="margin-bottom:8px">
+      <span class="stop-search-icon">🔍</span>
+      <input class="stop-search" id="spOverlaySearch" type="text"
+        placeholder="Search all playlists…"
+        oninput="spOverlayFilter(this.value)" autocomplete="off" />
+    </div>
+
+    <!-- Playlist list -->
+    <div id="spOverlayList" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+  </div>
+</div>
 </body>
 </html>
