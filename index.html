@@ -2192,48 +2192,95 @@ async function fetchWeather() {
 // Singapore bus stop database from data.busrouter.sg
 // ═══════════════════════════════════════════════════
 let ltaRefreshInterval = null;
-let sgStopsDb = null;   // { "12345": [lat, lon, "Stop Name"], ... }
-let sgStopsArr = [];    // [{ code, name, lat, lon }, ...]
+let sgStopsDb  = null;   // { "12345": [lat, lon, "Stop Name"], ... }
+let sgStopsArr = [];     // [{ code, name, lat, lon }, ...]
+let sgStopSvcs = null;   // { "12345": ["179","199","CT18",...], ... }
+
+// Curated NTU-area stops that have confirmed LTA public bus service (2xxxx codes)
+const NTU_SUGGESTED_STOPS = [
+  { code: '27211', label: 'Nanyang Dr – Lee Wee Nam Library',     svcs: '179, 179A' },
+  { code: '27219', label: 'Nanyang Dr – NIE Blk 2 (Opp LWN)',     svcs: '179A, 199' },
+  { code: '27261', label: 'Nanyang Dr – Hall 4',                   svcs: '179, 179A, 179B' },
+  { code: '27201', label: 'Nanyang Dr – Opp Hall 8',               svcs: '179, 179A' },
+  { code: '27281', label: 'Nanyang Dr – Opp School of CEE',        svcs: '179, 179A' },
+  { code: '27069', label: 'Nanyang Dr – Blk 41 (Opp Hall 4)',      svcs: '179, 179A' },
+  { code: '27199', label: 'Nanyang Ave – Outside Hall 11 (B27199)',svcs: '199' },
+  { code: '27321', label: 'Lien Ying Chow Dr – Hall 1 / Hall 16',  svcs: '179B' },
+  { code: '27331', label: 'Nanyang Terrace – Pioneer Hall',        svcs: '179' },
+  { code: '24481', label: 'Pioneer Rd – Pioneer MRT Exit B',       svcs: '179, CR, CWR' },
+  { code: '24489', label: 'Pioneer Rd – Opp Pioneer MRT Exit A',   svcs: '99, 99A, 179' },
+  { code: '22009', label: 'Boon Lay Int – Bay A',                  svcs: '179, 179A, 199, 77' },
+  { code: '22099', label: 'Boon Lay Int – Bay B',                  svcs: '179, 199, 98A' },
+];
 
 async function loadSgStops() {
-  if (sgStopsDb) return;  // already loaded
-  const CACHE_KEY = 'sg_bus_stops_v2';
-  const CACHE_AGE = 24 * 60 * 60 * 1000; // 1 day
+  if (sgStopsDb) return;
+  const STOPS_KEY = 'sg_bus_stops_v3';
+  const SVCS_KEY  = 'sg_bus_svcs_v2';
+  const CACHE_AGE = 24 * 60 * 60 * 1000;
 
   // Try sessionStorage cache first
   try {
-    const cached = sessionStorage.getItem(CACHE_KEY);
-    if (cached) {
-      const { ts, data } = JSON.parse(cached);
-      if (Date.now() - ts < CACHE_AGE) {
-        sgStopsDb  = data;
-        sgStopsArr = Object.entries(data).map(([code, v]) => ({ code, lat: v[0], lon: v[1], name: v[2] }));
+    const cs = sessionStorage.getItem(STOPS_KEY);
+    const cv = sessionStorage.getItem(SVCS_KEY);
+    if (cs && cv) {
+      const ps = JSON.parse(cs), pv = JSON.parse(cv);
+      if (Date.now() - ps.ts < CACHE_AGE && Date.now() - pv.ts < CACHE_AGE) {
+        sgStopsDb  = ps.data;
+        sgStopsArr = Object.entries(ps.data).map(([code, v]) => ({ code, lat: v[0], lon: v[1], name: v[2] }));
+        sgStopSvcs = pv.data;
         return;
       }
     }
   } catch (_) {}
 
-  // Try multiple URLs — the correct path has /data/ in it
-  const URLS = [
+  const STOP_URLS = [
     'https://data.busrouter.sg/v1/data/stops.min.json',
     'https://raw.githubusercontent.com/cheeaun/sgbusdata/main/data/v1/stops.min.json',
   ];
+  const SVCS_URLS = [
+    'https://data.busrouter.sg/v1/data/bus-stops-services.json',
+    'https://raw.githubusercontent.com/cheeaun/sgbusdata/main/data/v1/bus-stops-services.json',
+  ];
 
-  for (const url of URLS) {
+  // Fetch stops
+  for (const url of STOP_URLS) {
     try {
       const res  = await fetch(url);
       if (!res.ok) continue;
       const data = await res.json();
-      if (typeof data !== 'object' || !Object.keys(data).length) continue;
+      if (!Object.keys(data).length) continue;
       sgStopsDb  = data;
       sgStopsArr = Object.entries(data).map(([code, v]) => ({ code, lat: v[0], lon: v[1], name: v[2] }));
-      try {
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-      } catch (_) {}
-      return; // success
+      try { sessionStorage.setItem(STOPS_KEY, JSON.stringify({ ts: Date.now(), data })); } catch (_) {}
+      break;
     } catch (_) {}
   }
-  console.warn('Could not load SG bus stops from any source');
+
+  // Fetch services (bus numbers per stop) — best effort
+  for (const url of SVCS_URLS) {
+    try {
+      const res  = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Object.keys(data).length) continue;
+      sgStopSvcs = data;
+      try { sessionStorage.setItem(SVCS_KEY, JSON.stringify({ ts: Date.now(), data })); } catch (_) {}
+      break;
+    } catch (_) {}
+  }
+
+  if (!sgStopsDb) console.warn('Could not load SG bus stops');
+}
+
+function stopServiceBadges(code) {
+  // Returns a short HTML string of bus numbers served at this stop
+  const svcs = sgStopSvcs?.[code];
+  if (!svcs || !svcs.length) return '';
+  // Show up to 6 services, compact
+  const shown = svcs.slice(0, 6);
+  const more  = svcs.length > 6 ? `<span style="color:var(--muted);font-size:.58rem">+${svcs.length-6}</span>` : '';
+  return `<span class="si-routes">${shown.join(' · ')}${svcs.length > 6 ? ' …' : ''}</span>`;
 }
 
 function renderBusStopList(query = '') {
@@ -2241,36 +2288,63 @@ function renderBusStopList(query = '') {
   if (!container) return;
 
   if (!sgStopsArr.length) {
-    container.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">Loading stop database…</div>`;
+    container.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">⏳ Loading Singapore stop database…</div>`;
     loadSgStops().then(() => renderBusStopList(query));
     return;
   }
 
   const q = query.trim().toLowerCase();
-  // Filter: code exact prefix, or name contains, require at least 2 chars to search
-  let results = q.length >= 2
-    ? sgStopsArr.filter(s =>
-        s.code.startsWith(q) ||
-        s.name.toLowerCase().includes(q)
-      ).slice(0, 60)  // cap at 60 for performance
-    : sgStopsArr.filter(s => selectedStops.includes(s.code)); // show only selected when no query
-
   let html = '';
-  if (!q && selectedStops.length === 0) {
-    html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">Search above to find stops across Singapore</div>`;
-  } else if (results.length === 0) {
-    html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">No stops found for "${query}"</div>`;
-  } else {
-    results.forEach(stop => {
-      const sel = selectedStops.includes(stop.code);
-      html += `<div class="stop-item ${sel ? 'selected' : ''}" onclick="toggleBusStop('${stop.code}','${stop.name.replace(/'/g,"\\'")}')">
-        <span class="si-code">${stop.code}</span>
-        <span class="si-name">${stop.name}</span>
+
+  if (!q) {
+    // No query — show selected stops + NTU suggested stops
+    if (selectedStops.length > 0) {
+      html += `<div class="stop-area-label">Currently selected</div>`;
+      selectedStops.forEach(code => {
+        const s = sgStopsDb?.[code];
+        const name = s ? s[2] : code;
+        html += `<div class="stop-item selected" onclick="toggleBusStop('${code}')">
+          <span class="si-code">${code}</span>
+          <span class="si-name">${name}</span>
+          ${stopServiceBadges(code)}
+          <span class="si-check">✓</span>
+        </div>`;
+      });
+    }
+    html += `<div class="stop-area-label">📍 Suggested — NTU & Nearby (public bus stops)</div>`;
+    NTU_SUGGESTED_STOPS.forEach(s => {
+      const sel = selectedStops.includes(s.code);
+      const fullName = sgStopsDb?.[s.code]?.[2] || s.label;
+      html += `<div class="stop-item ${sel ? 'selected' : ''}" onclick="toggleBusStop('${s.code}')">
+        <span class="si-code">${s.code}</span>
+        <span class="si-name">${fullName}</span>
+        <span class="si-routes">${s.svcs}</span>
         <span class="si-check">${sel ? '✓' : ''}</span>
       </div>`;
     });
-    if (q.length >= 2 && sgStopsArr.filter(s => s.code.startsWith(q) || s.name.toLowerCase().includes(q)).length > 60) {
-      html += `<div style="padding:8px 12px;color:var(--muted);font-size:.7rem">Showing first 60 results — refine your search</div>`;
+  } else {
+    // Search mode
+    const matched = sgStopsArr.filter(s =>
+      s.code.startsWith(q) || s.name.toLowerCase().includes(q)
+    );
+    const results = matched.slice(0, 80);
+
+    if (!results.length) {
+      html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">No stops found for "${query}"</div>`;
+    } else {
+      results.forEach(stop => {
+        const sel  = selectedStops.includes(stop.code);
+        const warn = sel && sgStopSvcs && !(sgStopSvcs[stop.code]?.length > 0);
+        html += `<div class="stop-item ${sel ? 'selected' : ''}" onclick="toggleBusStop('${stop.code}')">
+          <span class="si-code">${stop.code}</span>
+          <span class="si-name">${stop.name}${warn ? ' ⚠️' : ''}</span>
+          ${stopServiceBadges(stop.code)}
+          <span class="si-check">${sel ? '✓' : ''}</span>
+        </div>`;
+      });
+      if (matched.length > 80) {
+        html += `<div style="padding:8px 12px;color:var(--muted);font-size:.7rem">Showing 80 of ${matched.length} results — type more to narrow down</div>`;
+      }
     }
   }
   container.innerHTML = html;
@@ -2278,7 +2352,7 @@ function renderBusStopList(query = '') {
 
 function filterBusStops(q) { renderBusStopList(q); }
 
-function toggleBusStop(code, name) {
+function toggleBusStop(code) {
   const idx = selectedStops.indexOf(code);
   if (idx > -1) {
     selectedStops.splice(idx, 1);
@@ -2289,8 +2363,6 @@ function toggleBusStop(code, name) {
       return;
     }
     selectedStops.push(code);
-    // Cache name for display
-    if (name && !sgStopsDb?.[code]) {}  // name passed from DOM
   }
   renderSelectedChips();
   renderBusStopList(document.getElementById('busStopSearchInput')?.value || '');
