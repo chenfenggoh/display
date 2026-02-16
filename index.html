@@ -1,0 +1,1916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;
+    script-src 'self' 'unsafe-inline' 'unsafe-eval';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com;
+    img-src 'self' data: blob: https://i.scdn.co https://mosaic.scdn.co https://*.scdn.co https://*.spotifycdn.com;
+    connect-src 'self'
+      https://accounts.spotify.com
+      https://api.spotify.com
+      https://api.data.gov.sg
+      https://arrivelah2.busrouter.sg;
+  " />
+  <title>NTU Smart Display</title>
+  <style>
+    /* Fallback font stack while Google Fonts loads (or on file://) */
+    :root {
+      --font-display: 'DM Serif Display', 'Georgia', serif;
+      --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
+      --font-body:    'Space Grotesk', 'Segoe UI', sans-serif;
+    }
+  </style>
+  <script>
+    // Load Google Fonts only when online (not on file://)
+    if (window.location.protocol !== 'file:') {
+      const l = document.createElement('link');
+      l.rel  = 'stylesheet';
+      l.href = 'https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500&family=Space+Grotesk:wght@300;400;500&display=swap';
+      document.head.appendChild(l);
+    }
+  </script>
+  <style>
+    :root {
+      --bg:        #0a0e14;
+      --surface:   #111722;
+      --border:    #1e2a3a;
+      --accent:    #00e5ff;
+      --accent2:   #ff6b35;
+      --accent3:   #a8ff78;
+      --text:      #e8f4f8;
+      --muted:     #5a7a8a;
+      --danger:    #ff4757;
+      --warning:   #ffd700;
+      --seats-ok:  #00e5a0;
+      --seats-sda: #ffd700;
+      --seats-lsd: #ff6b35;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Corner glow orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(100px);
+      pointer-events: none;
+      z-index: 0;
+      animation: pulse 8s ease-in-out infinite;
+    }
+    .orb-1 { width: 400px; height: 400px; background: rgba(0,229,255,.06); top: -100px; left: -100px; }
+    .orb-2 { width: 300px; height: 300px; background: rgba(255,107,53,.06); bottom: -80px; right: -80px; animation-delay: -4s; }
+    @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+    /* ─── LAYOUT ─── */
+    .app {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: 1fr;
+      min-height: 100vh;
+      padding: 20px;
+      gap: 16px;
+    }
+
+    /* ─── HEADER ─── */
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      padding: 20px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      animation: scan 4s linear infinite;
+    }
+    @keyframes scan { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+    .date-block .day {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 300;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .date-block .date {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    .clock-center {
+      text-align: center;
+    }
+    .clock-center .time {
+      font-family: var(--font-mono);
+      font-size: clamp(3rem, 8vw, 6rem);
+      font-weight: 400;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+      line-height: 1;
+      text-shadow: 0 0 40px rgba(0,229,255,.3);
+    }
+    .clock-center .seconds {
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      font-weight: 300;
+      color: var(--muted);
+    }
+
+    .location-block {
+      text-align: right;
+    }
+    .location-block .label {
+      font-size: 0.65rem;
+      font-weight: 300;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .location-block .campus {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      color: var(--accent2);
+    }
+
+    /* ─── MAIN GRID ─── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 2fr;
+      grid-template-rows: 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .main-grid { grid-template-columns: 1fr 1fr; }
+      .bus-section { grid-column: 1 / -1; }
+    }
+    @media (max-width: 600px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .bus-section { grid-column: 1; }
+    }
+
+    /* ─── CARDS ─── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-title {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      font-weight: 400;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title::before {
+      content: '';
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+
+
+    /* ─── MINI STATS CARD ─── */
+    .stat-big {
+      font-family: var(--font-mono);
+      font-size: 2.2rem;
+      font-weight: 400;
+      color: var(--accent3);
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ─── BUS SECTION ─── */
+    .bus-section {
+      grid-column: 3;
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .bus-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bus-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .bus-panel-title {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .bus-panel-title::before {
+      content: '';
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent2);
+      box-shadow: 0 0 8px var(--accent2);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    .last-updated {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      color: var(--muted);
+    }
+
+    .stop-name {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    .stop-code {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--accent);
+      background: rgba(0,229,255,.08);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+
+    .bus-row {
+      display: grid;
+      grid-template-columns: 60px 1fr 1fr 1fr;
+      gap: 6px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 10px;
+      margin-bottom: 6px;
+      border: 1px solid transparent;
+      transition: all .3s ease;
+      background: rgba(255,255,255,.02);
+    }
+    .bus-row:hover { background: rgba(0,229,255,.04); border-color: var(--border); }
+
+    .bus-num {
+      font-family: var(--font-mono);
+      font-weight: 500;
+      font-size: 1rem;
+      color: var(--text);
+      background: var(--border);
+      padding: 4px 8px;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .bus-time {
+      text-align: center;
+    }
+    .bus-time .mins {
+      font-family: var(--font-mono);
+      font-weight: 500;
+      font-size: 1.1rem;
+      display: block;
+    }
+    .bus-time .mins.arriving { color: var(--accent); text-shadow: 0 0 12px var(--accent); }
+    .bus-time .mins.soon     { color: var(--accent3); }
+    .bus-time .mins.later    { color: var(--text); }
+    .bus-time .mins.na       { color: var(--muted); font-size: .8rem; }
+    .bus-time .min-label {
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+
+    .bus-load {
+      text-align: center;
+    }
+    .load-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+    .load-sea .load-dot { background: var(--seats-ok); box-shadow: 0 0 6px var(--seats-ok); }
+    .load-sda .load-dot { background: var(--seats-sda); box-shadow: 0 0 6px var(--seats-sda); }
+    .load-lsd .load-dot { background: var(--seats-lsd); box-shadow: 0 0 6px var(--seats-lsd); }
+    .load-label {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      vertical-align: middle;
+    }
+
+    .bus-type {
+      text-align: right;
+    }
+    .type-badge {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255,255,255,.05);
+      color: var(--muted);
+    }
+    .type-badge.dd  { color: var(--accent2); background: rgba(255,107,53,.1); }
+    .type-badge.bd  { color: var(--accent3); background: rgba(168,255,120,.1); }
+    .type-badge.wab { color: var(--accent); }
+
+    /* divider */
+    .bus-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+
+    /* NTU bus section */
+    .ntu-route-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 500;
+      margin-right: 8px;
+      margin-bottom: 6px;
+    }
+    .ntu-route-badge.clb { background: rgba(30,100,255,.2); border: 1px solid rgba(30,100,255,.4); color: #6ab0ff; }
+    .ntu-route-badge.clr { background: rgba(255,60,60,.2); border: 1px solid rgba(255,60,60,.4); color: #ff8080; }
+    .ntu-route-badge.cr  { background: rgba(0,200,120,.2); border: 1px solid rgba(0,200,120,.4); color: var(--accent3); }
+
+    .ntu-arrival-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.02);
+      border: 1px solid transparent;
+      margin-bottom: 6px;
+    }
+
+    .ntu-route-info { display: flex; align-items: center; gap: 10px; }
+    .ntu-route-name {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+
+    .ntu-times { display: flex; gap: 12px; }
+    .ntu-time-chip {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: var(--border);
+      color: var(--text);
+    }
+    .ntu-time-chip.next { color: var(--accent); background: rgba(0,229,255,.1); border: 1px solid rgba(0,229,255,.2); }
+    .ntu-time-chip.soon { color: var(--accent3); background: rgba(168,255,120,.08); }
+
+    .occupancy-bar {
+      height: 3px;
+      border-radius: 2px;
+      background: var(--border);
+      margin-top: 4px;
+      overflow: hidden;
+    }
+    .occupancy-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width .5s ease;
+    }
+
+    /* ─── SPOTIFY NOW PLAYING ─── */
+    .spotify-card {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .sp-idle {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 20px 0;
+    }
+    .sp-idle-icon {
+      font-size: 2.5rem;
+      opacity: .3;
+    }
+    .sp-idle-text {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .sp-connect-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #1db954;
+      color: #000;
+      border: none;
+      border-radius: 20px;
+      padding: 8px 18px;
+      font-family: var(--font-body);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: .02em;
+      transition: all .2s;
+    }
+    .sp-connect-btn:hover { background: #1ed760; transform: scale(1.03); }
+    .sp-connect-btn:disabled { background: #555; color: #888; cursor: not-allowed; transform: none; }
+    .sp-disconnect-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      cursor: pointer;
+      transition: all .15s;
+      letter-spacing: .05em;
+    }
+    .sp-disconnect-btn:hover { border-color: var(--danger); color: var(--danger); }
+    .sp-now-playing {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .sp-album-art {
+      width: 76px;
+      height: 76px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+      background: var(--border);
+    }
+    .sp-album-art.spinning {
+      animation: sp-spin 8s linear infinite;
+    }
+    @keyframes sp-spin {
+      from { border-radius: 50%; }
+      to   { border-radius: 50%; transform: rotate(360deg); }
+    }
+    .sp-track-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .sp-track-name {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+      margin-bottom: 3px;
+    }
+    .sp-artist {
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+    .sp-album {
+      font-size: 0.65rem;
+      color: var(--muted);
+      opacity: .6;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sp-progress-wrap {
+      margin-top: 10px;
+    }
+    .sp-progress-bar {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .sp-progress-fill {
+      height: 100%;
+      background: #1db954;
+      border-radius: 2px;
+      transition: width .5s linear;
+    }
+    .sp-times {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      color: var(--muted);
+    }
+    .sp-state-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+    .sp-playing-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      color: #1db954;
+      letter-spacing: .1em;
+    }
+    .sp-playing-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: #1db954;
+      border-radius: 50%;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+    .sp-paused-badge {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      color: var(--muted);
+      letter-spacing: .1em;
+    }
+    .sp-nothing {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    /* Config panel */
+    .config-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 100;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 10px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: .1em;
+      transition: all .2s;
+    }
+    .config-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    .config-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+    }
+    .config-modal.open { display: flex; }
+
+    .config-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      width: min(680px, 96vw);
+      max-height: 94vh;
+      overflow-y: auto;
+    }
+
+    /* ── Tab nav ── */
+    .cfg-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 10px;
+    }
+    .cfg-tab {
+      flex: 1;
+      padding: 8px 10px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .cfg-tab.active { background: var(--surface); color: var(--accent); border: 1px solid var(--border); }
+    .cfg-pane { display: none; }
+    .cfg-pane.active { display: block; }
+
+    /* ── Stop picker ── */
+    .stop-search-wrap {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .stop-search {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px 10px 36px;
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .stop-search:focus { border-color: var(--accent); }
+    .stop-search-icon {
+      position: absolute;
+      left: 12px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    .stop-area-label {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 10px 0 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+      margin-top: 8px;
+    }
+    .stop-area-label:first-child { margin-top: 0; }
+
+    .stop-list {
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px;
+      background: var(--bg);
+      margin-bottom: 14px;
+    }
+    .stop-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background .15s;
+      border: 1px solid transparent;
+    }
+    .stop-item:hover { background: rgba(0,229,255,.05); }
+    .stop-item.selected {
+      background: rgba(0,229,255,.08);
+      border-color: rgba(0,229,255,.25);
+    }
+    .stop-item .si-name {
+      font-size: 0.82rem;
+      color: var(--text);
+      flex: 1;
+    }
+    .stop-item .si-routes {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-align: right;
+    }
+    .stop-item .si-check {
+      width: 16px; height: 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 0.65rem;
+      transition: all .15s;
+    }
+    .stop-item.selected .si-check {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+    }
+
+    /* NTU route picker checkboxes */
+    .route-toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .route-toggle { display: none; }
+    .route-toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: var(--bg);
+      transition: all .2s;
+      user-select: none;
+    }
+    #rt-clb:checked + .route-toggle-label { background: rgba(30,100,255,.15); border-color: rgba(30,100,255,.4); color: #6ab0ff; }
+    #rt-clr:checked + .route-toggle-label { background: rgba(255,60,60,.15);  border-color: rgba(255,60,60,.4);  color: #ff8080; }
+    #rt-cr:checked  + .route-toggle-label { background: rgba(0,200,120,.15);  border-color: rgba(0,200,120,.4);  color: var(--accent3); }
+    #rt-cwr:checked + .route-toggle-label { background: rgba(255,165,0,.15);  border-color: rgba(255,165,0,.4);  color: #ffb347; }
+    .config-box h2 {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      margin-bottom: 6px;
+    }
+    .config-box p.sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .field input, .field select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .field input:focus, .field select:focus { border-color: var(--accent); }
+    .field small { font-size: 0.65rem; color: var(--muted); margin-top: 4px; display: block; }
+
+    .btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: all .2s;
+    }
+    .btn-cancel { background: transparent; color: var(--muted); }
+    .btn-cancel:hover { color: var(--text); }
+    .btn-save { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 500; }
+    .btn-save:hover { opacity: .85; }
+
+    .loading-text {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      padding: 20px;
+      animation: fade 1.5s ease-in-out infinite alternate;
+    }
+    @keyframes fade { from{opacity:.3} to{opacity:1} }
+
+    .error-msg {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--danger);
+      padding: 10px 14px;
+      background: rgba(255,71,87,.08);
+      border: 1px solid rgba(255,71,87,.2);
+      border-radius: 8px;
+    }
+
+    .refresh-btn {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all .2s;
+      letter-spacing: .08em;
+    }
+    .refresh-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* NTU notice */
+    .ntu-notice {
+      background: rgba(255,107,53,.06);
+      border: 1px solid rgba(255,107,53,.2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .ntu-notice strong { color: var(--accent2); }
+
+    /* Status indicator */
+    .status-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .status-live { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); animation: blink 1.5s infinite; }
+    .status-offline { background: var(--danger); }
+
+    /* Humidity card */
+    .hum-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .hum-row:last-child { border-bottom: none; }
+    .hum-row .hlabel { font-size: 0.75rem; color: var(--muted); }
+    .hum-row .hval   { font-family: var(--font-mono); font-size: 0.85rem; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<div class="app">
+
+  <!-- HEADER: Date + Clock + Location -->
+  <header>
+    <div class="date-block">
+      <div class="day" id="dayName">—</div>
+      <div class="date" id="dateString">—</div>
+    </div>
+    <div class="clock-center">
+      <div class="time" id="clockHM">--:--</div>
+      <div class="seconds" id="clockSec">--</div>
+    </div>
+    <div class="location-block">
+      <div class="label">Campus</div>
+      <div class="campus">NTU · Jurong West SG</div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT GRID -->
+  <div class="main-grid">
+
+    <!-- TODAY AT NTU (col 1) -->
+    <div class="card" style="grid-column:1; grid-row:1">
+      <div class="card-title">Today at NTU</div>
+      <div id="todayCard">
+        <div class="hum-row">
+          <span class="hlabel">⚡ Semester</span>
+          <span class="hval" id="semLabel">—</span>
+        </div>
+        <div class="hum-row">
+          <span class="hlabel">📅 Week</span>
+          <span class="hval" id="weekLabel">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPOTIFY NOW PLAYING (col 2) -->
+    <div class="card" style="grid-column:2; grid-row:1">
+      <div class="card-title" style="justify-content:space-between">
+        <span>Now Playing</span>
+        <span id="spHeaderBtn"></span>
+      </div>
+      <div class="spotify-card" id="spotifyCard">
+        <div class="sp-idle">
+          <div class="sp-idle-icon">🎵</div>
+          <div class="sp-idle-text">Connect Spotify to see what's playing</div>
+          <button class="sp-connect-btn" id="spConnectBtn" onclick="spotifyLogin()">
+            ♫ Connect Spotify
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NTU SHUTTLE PANEL (col 3) -->
+    <div class="bus-section">
+      <div class="bus-panel">
+        <div class="bus-panel-header">
+          <div class="bus-panel-title">
+            <span class="status-dot status-offline" id="ntuStatusDot"></span>
+            NTU Omnibus · Campus Shuttle
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div class="last-updated" id="ntuLastUpdated">—</div>
+            <button class="refresh-btn" onclick="fetchNtuBus()">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="ntuBusContent">
+          <div class="loading-text">Initialising…</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CONFIG BUTTON -->
+<button class="config-btn" onclick="openConfig()">⚙ Settings</button>
+
+<!-- CONFIG MODAL -->
+<div class="config-modal" id="configModal">
+  <div class="config-box">
+    <h2>Display Settings</h2>
+    <p class="sub">Settings are stored locally on this device only.</p>
+
+    <!-- Tab nav -->
+    <div class="cfg-tabs">
+      <button class="cfg-tab active" onclick="switchTab('ntu')">🎓 NTU Shuttle</button>
+      <button class="cfg-tab" onclick="switchTab('spotify')">🎵 Spotify</button>
+      <button class="cfg-tab" onclick="switchTab('display')">⚙ Display</button>
+    </div>
+
+    <!-- ── TAB: NTU SHUTTLE ── -->
+    <div class="cfg-pane active" id="pane-ntu">
+      <div class="field">
+        <label>NTU shuttle routes to show</label>
+        <div class="route-toggles">
+          <input type="checkbox" class="route-toggle" id="rt-clb" />
+          <label class="route-toggle-label" for="rt-clb">🔵 Campus Loop – Blue</label>
+
+          <input type="checkbox" class="route-toggle" id="rt-clr" />
+          <label class="route-toggle-label" for="rt-clr">🔴 Campus Loop – Red</label>
+
+          <input type="checkbox" class="route-toggle" id="rt-cr" />
+          <label class="route-toggle-label" for="rt-cr">🟢 Campus Rider (Pioneer MRT)</label>
+
+          <input type="checkbox" class="route-toggle" id="rt-cwr" />
+          <label class="route-toggle-label" for="rt-cwr">🟠 Campus Weekend Rider</label>
+        </div>
+        <small>CL-B &amp; CL-R loop the campus (~10 min interval). CR goes to Pioneer MRT (~15 min). CWR operates weekends/PH only.</small>
+      </div>
+
+      <div class="field">
+        <label>Your usual NTU pickup stop</label>
+        <div class="stop-search-wrap">
+          <span class="stop-search-icon">🔍</span>
+          <input class="stop-search" id="stopSearchInput" type="text"
+            placeholder="Search stop name or route…"
+            oninput="filterStops(this.value)" autocomplete="off" />
+        </div>
+        <div class="stop-list" id="stopListContainer" style="max-height:200px">
+          <!-- Populated by JS -->
+        </div>
+        <div id="selectedStopDisplay" style="margin-top:8px;font-size:.75rem;color:var(--accent)"></div>
+        <small style="display:block;margin-top:4px">This label shows next to the shuttle panel.</small>
+      </div>
+
+      <div class="ntu-notice" style="margin-top:16px">
+        <strong>ℹ️ Note:</strong> NTU Omnibus uses a closed API — no public endpoint exists.
+        Times shown are schedule-based estimates (±2–3 min). Use the official
+        <strong>NTU Omnibus app</strong> for real-time GPS tracking.
+      </div>
+    </div>
+
+    <!-- ── TAB: SPOTIFY ── -->
+    <div class="cfg-pane" id="pane-spotify">
+      <div id="spSettingsStatus" style="margin-bottom:14px"></div>
+
+      <div id="spServerWarning" style="display:none" class="ntu-notice" style="margin-bottom:16px;background:rgba(255,107,53,.04);border-color:rgba(255,107,53,.25)">
+        <strong style="color:var(--accent2)">⚠️ File opened directly — server needed.</strong><br>
+        Run <code style="color:var(--accent)">start.command</code> (Mac) or <code style="color:var(--accent)">start.bat</code> (Windows),
+        then open the URL it prints in your browser. Spotify OAuth requires <code>http://</code>.
+      </div>
+
+      <div class="field">
+        <label>Spotify Client ID</label>
+        <input type="text" id="cfgSpClientId" placeholder="e.g. 1a2b3c4d5e6f7890abcdef1234567890" autocomplete="off" />
+        <small>
+          1. Go to <strong>developer.spotify.com/dashboard</strong> → Create app<br>
+          2. Under <strong>Redirect URIs</strong>, add exactly:<br>
+          <code id="spRedirectUriDisplay" style="color:var(--accent);font-size:.75rem;display:block;margin:5px 0 4px;padding:4px 6px;background:rgba(0,229,255,.06);border-radius:4px;word-break:break-all;user-select:all">—</code>
+          3. Paste your Client ID above → Save → Connect
+        </small>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px">
+        <button class="sp-connect-btn" id="spSettingsConnectBtn" onclick="spotifyLoginFromSettings()">♫ Connect Spotify</button>
+        <button class="sp-disconnect-btn" id="spSettingsDisconnectBtn" onclick="spotifyLogout()" style="display:none">Disconnect</button>
+      </div>
+    </div>
+
+    <!-- ── TAB: DISPLAY ── -->
+    <div class="cfg-pane" id="pane-display">
+      <div class="field">
+        <label>Refresh Interval (seconds)</label>
+        <input type="number" id="cfgRefresh" placeholder="30" min="15" max="300" />
+        <small>How often to recalculate shuttle schedule estimates. Minimum 15s.</small>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-cancel" onclick="closeConfig()">Cancel</button>
+      <button class="btn btn-save" onclick="saveConfig()">Save &amp; Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// XHR FETCH HELPER
+// Replaces fetch() for file:// compatibility.
+// Android WebView blocks fetch() from file:// but
+// allows XMLHttpRequest. This wrapper mimics fetch's
+// Promise API so the rest of the code stays clean.
+// ═══════════════════════════════════════════════════
+function xhrFetch(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(options.method || 'GET', url, true);
+
+    // Set request headers
+    if (options.headers) {
+      Object.entries(options.headers).forEach(([k, v]) => {
+        xhr.setRequestHeader(k, v);
+      });
+    }
+
+    xhr.timeout = 10000; // 10 second timeout
+
+    xhr.onload = () => {
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        json: () => Promise.resolve(JSON.parse(xhr.responseText)),
+        text: () => Promise.resolve(xhr.responseText),
+      });
+    };
+    xhr.onerror   = () => reject(new Error(`Network error fetching ${url}`));
+    xhr.ontimeout = () => reject(new Error(`Timeout fetching ${url}`));
+
+    xhr.send(options.body || null);
+  });
+}
+
+// Override global fetch with xhrFetch on file:// (Android WebView / local file)
+if (window.location.protocol === 'file:') {
+  window.fetch = xhrFetch;
+}
+
+// ═══════════════════════════════════════════════════
+// NTU SHUTTLE STOP DATABASE
+// Only stops served by NTU Omnibus routes
+// ═══════════════════════════════════════════════════
+const NTU_STOPS = [
+  // ── Campus Loop – Blue (CL-B) & Red (CL-R) ────────────────────────────
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Hall 1 / Opp Hall 16',              routes: 'CL-B' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp Hall 2 (Lien Ying Chow)',       routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp Hall 4 (Nanyang Dr)',            routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp Hall 8 / Nanyang Heights',       routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Hall 9 / Opp Hall 8',               routes: 'CL-B' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp Hall 10 & 11',                  routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Nanyang Crescent Hall (Hall 10/11)', routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp Hall 14 & 15',                  routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp Hall 3 & 16 (Nanyang Walk)',     routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'NIE Block 2 / Opp Hall 3 & 16',     routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Lee Wee Nam Library',               routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp SPMS / South Spine',            routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Admin Cluster / The Hive',          routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp WKWSCI / North Spine',          routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Gaia / Academic Building South',    routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp Yunnan Garden',                 routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Nanyang Dr – Hall 2',               routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Nanyang Dr – Block 41',             routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Opp School of CEE (Nanyang Dr)',    routes: 'CL-B, CL-R' },
+  { area: 'Campus Loops (CL-B & CL-R)', name: 'Hall 6 / Lien Ying Chow Dr',        routes: 'CL-B' },
+  // ── Campus Rider (CR) & Campus Weekend Rider (CWR) ────────────────────
+  { area: 'Campus Rider (CR & CWR)',    name: 'Pioneer Hall / Nanyang Terrace',    routes: 'CR, CL-R' },
+  { area: 'Campus Rider (CR & CWR)',    name: 'Pioneer MRT Exit B',                routes: 'CR, CWR' },
+];
+
+const UNIQUE_STOPS = NTU_STOPS;
+
+// ═══════════════════════════════════════════════════
+// CONFIG & STATE
+// ═══════════════════════════════════════════════════
+const DEFAULT_CONFIG = {
+  ntuStop:         'Hall 1',
+  ntuRoutes:       'CL-B,CL-R,CR',
+  refresh:         30,
+  spotifyClientId: '',
+};
+
+let cfg = loadConfig();
+let clockInterval   = null;
+let refreshInterval = null;
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem('smartDisplayConfig');
+    const parsed = raw ? JSON.parse(raw) : {};
+    return { ...DEFAULT_CONFIG, ...parsed };
+  } catch { return { ...DEFAULT_CONFIG }; }
+}
+
+// ── Tab switching ──
+function switchTab(name) {
+  document.querySelectorAll('.cfg-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.cfg-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-' + name).classList.add('active');
+  document.querySelectorAll('.cfg-tab')[['ntu','spotify','display'].indexOf(name)].classList.add('active');
+}
+
+// ── Stop list rendering (single-select, pick your stop label) ──
+function renderStopList(query = '') {
+  const container = document.getElementById('stopListContainer');
+  const q = query.toLowerCase().trim();
+
+  const filtered = UNIQUE_STOPS.filter(stop =>
+    !q ||
+    stop.name.toLowerCase().includes(q) ||
+    stop.routes.toLowerCase().includes(q) ||
+    stop.area.toLowerCase().includes(q)
+  );
+
+  const areas = {};
+  filtered.forEach(stop => {
+    if (!areas[stop.area]) areas[stop.area] = [];
+    areas[stop.area].push(stop);
+  });
+
+  let html = '';
+  for (const [area, stops] of Object.entries(areas)) {
+    html += `<div class="stop-area-label">${area}</div>`;
+    stops.forEach(stop => {
+      const sel = cfg.ntuStop === stop.name;
+      html += `<div class="stop-item ${sel ? 'selected' : ''}" onclick="selectStop('${stop.name.replace(/'/g,"\\'")}')">
+        <span class="si-name">${stop.name}</span>
+        <span class="si-routes">${stop.routes}</span>
+        <span class="si-check">${sel ? '✓' : ''}</span>
+      </div>`;
+    });
+  }
+
+  if (!html) html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">No stops match "${query}"</div>`;
+  container.innerHTML = html;
+
+  const disp = document.getElementById('selectedStopDisplay');
+  if (disp) disp.textContent = cfg.ntuStop ? `Selected: ${cfg.ntuStop}` : '';
+}
+
+function filterStops(q) { renderStopList(q); }
+
+function selectStop(name) {
+  cfg.ntuStop = name;
+  renderStopList(document.getElementById('stopSearchInput').value);
+}
+
+function saveConfig() {
+  cfg.refresh = parseInt(document.getElementById('cfgRefresh').value) || 30;
+
+  // Spotify client ID
+  const spIdEl = document.getElementById('cfgSpClientId');
+  if (spIdEl) cfg.spotifyClientId = spIdEl.value.trim();
+
+  // Build ntuRoutes from checkboxes
+  const routes = [];
+  if (document.getElementById('rt-clb').checked)  routes.push('CL-B');
+  if (document.getElementById('rt-clr').checked)  routes.push('CL-R');
+  if (document.getElementById('rt-cr').checked)   routes.push('CR');
+  if (document.getElementById('rt-cwr').checked)  routes.push('CWR');
+  cfg.ntuRoutes = routes.length ? routes.join(',') : 'CL-B,CL-R,CR';
+
+  // ntuStop is set live by selectStop()
+  localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
+  closeConfig();
+  startApp();
+}
+
+function openConfig() {
+  document.getElementById('cfgRefresh').value = cfg.refresh || 30;
+
+  // Sync route checkboxes
+  const routes = (cfg.ntuRoutes || 'CL-B,CL-R,CR').split(',').map(r => r.trim());
+  document.getElementById('rt-clb').checked = routes.includes('CL-B');
+  document.getElementById('rt-clr').checked = routes.includes('CL-R');
+  document.getElementById('rt-cr').checked  = routes.includes('CR');
+  document.getElementById('rt-cwr').checked = routes.includes('CWR');
+
+  // Spotify
+  const spIdEl = document.getElementById('cfgSpClientId');
+  if (spIdEl) spIdEl.value = cfg.spotifyClientId || '';
+  spUpdateSettingsPanel();
+
+  // Render stop picker
+  renderStopList();
+  document.getElementById('stopSearchInput').value = '';
+
+  document.getElementById('configModal').classList.add('open');
+  switchTab('ntu');
+}
+
+function closeConfig() {
+  document.getElementById('configModal').classList.remove('open');
+}
+
+document.getElementById('configModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('configModal')) closeConfig();
+});
+
+// ═══════════════════════════════════════════════════
+// CLOCK & DATE
+// ═══════════════════════════════════════════════════
+const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function updateClock() {
+  const now = new Date();
+  const hh  = String(now.getHours()).padStart(2,'0');
+  const mm  = String(now.getMinutes()).padStart(2,'0');
+  const ss  = String(now.getSeconds()).padStart(2,'0');
+
+  document.getElementById('clockHM').textContent  = `${hh}:${mm}`;
+  document.getElementById('clockSec').textContent = ss;
+
+  const day   = DAYS[now.getDay()];
+  const date  = now.getDate();
+  const month = MONTHS[now.getMonth()];
+  const year  = now.getFullYear();
+
+  document.getElementById('dayName').textContent   = day.toUpperCase();
+  document.getElementById('dateString').textContent = `${date} ${month} ${year}`;
+
+  updateNtuSemesterInfo(now);
+}
+
+function updateNtuSemesterInfo(now) {
+  // NTU Academic Calendar estimate (adjust each year)
+  // Sem 1 roughly Aug–Nov, Sem 2 roughly Jan–Apr
+  const month = now.getMonth(); // 0-indexed
+  const day   = now.getDate();
+
+  let sem = '—';
+  let week = '—';
+
+  // Rough semester boundaries (2025 AY)
+  const semBounds = [
+    { name: 'Semester 1 AY25/26', start: new Date('2025-08-11'), end: new Date('2025-11-28') },
+    { name: 'Semester 2 AY25/26', start: new Date('2026-01-12'), end: new Date('2026-04-30') },
+  ];
+
+  for (const s of semBounds) {
+    if (now >= s.start && now <= s.end) {
+      sem = s.name;
+      const diffMs = now - s.start;
+      const diffWeeks = Math.floor(diffMs / (7*24*60*60*1000)) + 1;
+      week = `Week ${Math.min(diffWeeks, 13)}`;
+      break;
+    }
+  }
+
+  // Check vacation / exam periods
+  if (sem === '—') {
+    const examPeriods = [
+      { label: '📝 Exam Period', start: new Date('2025-11-21'), end: new Date('2025-12-06') },
+      { label: '📝 Exam Period', start: new Date('2026-04-24'), end: new Date('2026-05-09') },
+    ];
+    for (const ep of examPeriods) {
+      if (now >= ep.start && now <= ep.end) { sem = ep.label; break; }
+    }
+  }
+  if (sem === '—') sem = 'Vacation / Break';
+
+  document.getElementById('semLabel').textContent  = sem;
+  document.getElementById('weekLabel').textContent = week;
+}
+
+
+// ═══════════════════════════════════════════════════
+// NTU OMNIBUS — Schedule-based (no public API available)
+// ═══════════════════════════════════════════════════
+// NTU's Omnibus uses a closed Fleet Management System (OutSystems-based).
+// No public API endpoint exists. We provide schedule-based timings derived
+// from official NTU published timetables.
+//
+// Route info: https://www.ntu.edu.sg/about-us/visiting-ntu/internal-campus-shuttle
+
+const NTU_SCHEDULES = {
+  'CL-B': {
+    name: 'Campus Loop – Blue',
+    color: 'clb',
+    interval: 10, // minutes between buses (approximate)
+    // First/last bus from main terminus (Opp Hall 11)
+    weekday: { first: '08:00', last: '22:00' },
+    weekend: { first: '08:00', last: '22:00' },
+    active: true,
+  },
+  'CL-R': {
+    name: 'Campus Loop – Red',
+    color: 'clr',
+    interval: 10,
+    weekday: { first: '08:00', last: '22:00' },
+    weekend: { first: '08:00', last: '22:00' },
+    active: true,
+  },
+  'CR': {
+    name: 'Campus Rider (→ Pioneer MRT)',
+    color: 'cr',
+    interval: 15,
+    weekday: { first: '07:30', last: '23:00' },
+    weekend: { first: '08:00', last: '23:00' },
+    active: true,
+  },
+};
+
+// Generate next departures based on schedule interval
+function getNextDepartures(route, now, count = 3) {
+  const r = NTU_SCHEDULES[route];
+  if (!r) return [];
+
+  const isWeekend = [0,6].includes(now.getDay());
+  const sched = isWeekend ? r.weekend : r.weekday;
+
+  const [fh, fm] = sched.first.split(':').map(Number);
+  const [lh, lm] = sched.last.split(':').map(Number);
+
+  const firstMinutes = fh * 60 + fm;
+  const lastMinutes  = lh * 60 + lm;
+  const nowMinutes   = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+
+  if (nowMinutes > lastMinutes + r.interval) return [];
+  if (nowMinutes < firstMinutes) {
+    // Before first bus
+    const upcoming = [];
+    for (let i = 0; i < count; i++) {
+      upcoming.push(firstMinutes + i * r.interval);
+    }
+    return upcoming.map(m => {
+      const h = Math.floor(m / 60) % 24;
+      const min = m % 60;
+      return { time: `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`, mins: Math.round(m - nowMinutes) };
+    });
+  }
+
+  // During service hours — find next departure slot
+  const elapsed = nowMinutes - firstMinutes;
+  const slotsElapsed = Math.floor(elapsed / r.interval);
+  const nextSlotMins = firstMinutes + (slotsElapsed + 1) * r.interval;
+
+  const upcoming = [];
+  for (let i = 0; i < count; i++) {
+    const slotMins = nextSlotMins + i * r.interval;
+    if (slotMins > lastMinutes + r.interval) break;
+    const h   = Math.floor(slotMins / 60) % 24;
+    const min = slotMins % 60;
+    upcoming.push({
+      time: `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`,
+      mins: Math.round(slotMins - nowMinutes)
+    });
+  }
+  return upcoming;
+}
+
+function fetchNtuBus() {
+  const routes = cfg.ntuRoutes.split(',').map(r => r.trim().toUpperCase()).filter(Boolean);
+  const now    = new Date();
+  const stopLabel = cfg.ntuStop || 'Campus';
+  let html = '';
+
+  html += `<div style="margin-bottom:12px">
+    <span style="font-family:var(--font-display);font-size:.95rem">Stop:</span>
+    <span class="stop-code">${stopLabel}</span>
+  </div>`;
+
+  html += `<div class="ntu-notice" style="margin-bottom:14px">
+    <strong>ℹ️ Schedule-based</strong> — NTU Omnibus has no public API.
+    These timings are estimated from the official schedule (±2–3 min offset).
+    For real-time data, use the <strong>NTU Omnibus app</strong>.
+  </div>`;
+
+  for (const route of routes) {
+    const info = NTU_SCHEDULES[route];
+    if (!info) continue;
+
+    const departures = getNextDepartures(route, now);
+
+    html += `<div class="ntu-arrival-row">
+      <div class="ntu-route-info">
+        <span class="ntu-route-badge ${info.color}">${route}</span>
+        <span class="ntu-route-name">${info.name}</span>
+      </div>
+      <div class="ntu-times">`;
+
+    if (departures.length === 0) {
+      html += `<span class="ntu-time-chip" style="color:var(--muted)">Not in service</span>`;
+    } else {
+      departures.forEach((dep, i) => {
+        const cls = i === 0 ? (dep.mins <= 2 ? 'next' : 'soon') : '';
+        const label = dep.mins <= 1 ? 'Arr' : `${dep.mins}m`;
+        html += `<span class="ntu-time-chip ${cls}" title="${dep.time}">${label}</span>`;
+      });
+    }
+
+    html += `</div></div>`;
+  }
+
+  if (routes.length === 0) {
+    html += `<div class="error-msg">No routes configured. Click ⚙ Settings and set NTU Routes.</div>`;
+  }
+
+  document.getElementById('ntuBusContent').innerHTML = html;
+  document.getElementById('ntuStatusDot').className = 'status-dot status-live';
+  document.getElementById('ntuLastUpdated').textContent =
+    'Est. at ' + now.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit'});
+}
+
+
+// ═══════════════════════════════════════════════════
+// SPOTIFY — PKCE Auth + Now Playing
+// No backend required. PKCE flow runs entirely in
+// the browser. User creates a free Spotify app at
+// developer.spotify.com and pastes the Client ID.
+// ═══════════════════════════════════════════════════
+
+const SP_SCOPES      = 'user-read-currently-playing user-read-playback-state';
+const SP_API_BASE    = 'https://api.spotify.com/v1';
+const SP_AUTH_URL    = 'https://accounts.spotify.com/authorize';
+const SP_TOKEN_URL   = 'https://accounts.spotify.com/api/token';
+
+// Polling: 5s while playing, 30s while paused/idle
+let spPollInterval  = null;
+let spProgressTimer = null;
+let spCurrentMs     = 0;   // local progress counter
+let spDurationMs    = 0;
+let spIsPlaying     = false;
+
+// ─── PKCE helpers ────────────────────────────────────────────────────────────
+function spRedirectUri() {
+  // Hardcoded to match the local server. Must be added exactly in Spotify Dashboard.
+  // Spotify no longer allows localhost or file:// — 127.0.0.1 is required.
+  return 'http://127.0.0.1:8888/';
+}
+
+async function pkceChallenge() {
+  const verifier = Array.from(crypto.getRandomValues(new Uint8Array(64)))
+    .map(b => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'[b % 66])
+    .join('');
+  const data   = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  return { verifier, challenge };
+}
+
+// ─── Auth flow ────────────────────────────────────────────────────────────────
+async function spotifyLogin() {
+  const clientId = cfg.spotifyClientId;
+  if (!clientId) {
+    alert('Please enter your Spotify Client ID in ⚙ Settings → Spotify first.');
+    openConfig(); switchTab('spotify'); return;
+  }
+  const { verifier, challenge } = await pkceChallenge();
+  localStorage.setItem('sp_verifier', verifier);
+  localStorage.setItem('sp_client_id', clientId);
+
+  const params = new URLSearchParams({
+    client_id:             clientId,
+    response_type:         'code',
+    redirect_uri:          spRedirectUri(),
+    scope:                 SP_SCOPES,
+    code_challenge_method: 'S256',
+    code_challenge:        challenge,
+    state:                 'ntu_display',
+  });
+  window.location.href = SP_AUTH_URL + '?' + params;
+}
+
+async function spotifyLoginFromSettings() {
+  // Save the client ID from settings before redirecting
+  const id = document.getElementById('cfgSpClientId').value.trim();
+  if (!id) { alert('Please enter your Spotify Client ID.'); return; }
+  cfg.spotifyClientId = id;
+  localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
+  await spotifyLogin();
+}
+
+async function spHandleCallback() {
+  const params   = new URLSearchParams(window.location.search);
+  const code     = params.get('code');
+  const state    = params.get('state');
+  if (!code || state !== 'ntu_display') return;
+
+  // Clean up URL
+  window.history.replaceState({}, '', window.location.pathname);
+
+  const verifier  = localStorage.getItem('sp_verifier');
+  const clientId  = localStorage.getItem('sp_client_id') || cfg.spotifyClientId;
+  if (!verifier || !clientId) return;
+
+  try {
+    const res = await fetch(SP_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type:    'authorization_code',
+        code,
+        redirect_uri:  spRedirectUri(),
+        client_id:     clientId,
+        code_verifier: verifier,
+      }),
+    });
+    if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
+    const data = await res.json();
+    spSaveTokens(data, clientId);
+    localStorage.removeItem('sp_verifier');
+  } catch (e) {
+    console.error('Spotify token exchange error:', e);
+    spRenderIdle(`Auth failed: ${e.message}`);
+  }
+}
+
+function spSaveTokens(data, clientId) {
+  const expiry = Date.now() + data.expires_in * 1000;
+  localStorage.setItem('sp_access_token',  data.access_token);
+  localStorage.setItem('sp_refresh_token', data.refresh_token);
+  localStorage.setItem('sp_token_expiry',  expiry);
+  localStorage.setItem('sp_client_id',     clientId || cfg.spotifyClientId);
+  cfg.spotifyClientId = clientId || cfg.spotifyClientId;
+  localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
+  spStartPolling();
+}
+
+async function spRefreshToken() {
+  const refreshToken = localStorage.getItem('sp_refresh_token');
+  const clientId     = localStorage.getItem('sp_client_id') || cfg.spotifyClientId;
+  if (!refreshToken || !clientId) throw new Error('No refresh token');
+
+  const res = await fetch(SP_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type:    'refresh_token',
+      refresh_token: refreshToken,
+      client_id:     clientId,
+    }),
+  });
+  if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
+  const data = await res.json();
+  const expiry = Date.now() + data.expires_in * 1000;
+  localStorage.setItem('sp_access_token', data.access_token);
+  localStorage.setItem('sp_token_expiry', expiry);
+  if (data.refresh_token) localStorage.setItem('sp_refresh_token', data.refresh_token);
+  return data.access_token;
+}
+
+async function spGetToken() {
+  const token  = localStorage.getItem('sp_access_token');
+  const expiry = parseInt(localStorage.getItem('sp_token_expiry') || '0');
+  if (!token) return null;
+  if (Date.now() > expiry - 60000) return await spRefreshToken();
+  return token;
+}
+
+function spotifyLogout() {
+  localStorage.removeItem('sp_access_token');
+  localStorage.removeItem('sp_refresh_token');
+  localStorage.removeItem('sp_token_expiry');
+  clearInterval(spPollInterval);
+  clearInterval(spProgressTimer);
+  spRenderIdle('Disconnected');
+  spUpdateSettingsPanel();
+}
+
+// ─── Now Playing fetch & render ──────────────────────────────────────────────
+async function fetchNowPlaying() {
+  const token = await spGetToken().catch(() => null);
+  if (!token) {
+    spRenderConnectPrompt();
+    return;
+  }
+
+  try {
+    const res = await fetch(`${SP_API_BASE}/me/player/currently-playing`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.status === 204 || res.status === 200 && res.headers.get('content-length') === '0') {
+      spRenderNothing();
+      spSetPollRate(false);
+      return;
+    }
+    if (!res.ok) {
+      if (res.status === 401) { await spRefreshToken(); fetchNowPlaying(); return; }
+      throw new Error(`Spotify API ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (!data || !data.item) { spRenderNothing(); spSetPollRate(false); return; }
+
+    spIsPlaying  = data.is_playing;
+    spCurrentMs  = data.progress_ms || 0;
+    spDurationMs = data.item.duration_ms || 0;
+
+    spRenderTrack(data);
+    spSetPollRate(data.is_playing);
+
+    // Local progress ticker while playing
+    clearInterval(spProgressTimer);
+    if (data.is_playing) {
+      spProgressTimer = setInterval(() => {
+        spCurrentMs = Math.min(spCurrentMs + 1000, spDurationMs);
+        spUpdateProgress();
+      }, 1000);
+    }
+
+  } catch (e) {
+    console.warn('Spotify fetch error:', e.message);
+  }
+}
+
+function spSetPollRate(playing) {
+  clearInterval(spPollInterval);
+  spPollInterval = setInterval(fetchNowPlaying, playing ? 5000 : 30000);
+}
+
+function spStartPolling() {
+  fetchNowPlaying();
+  spUpdateSettingsPanel();
+}
+
+// ─── Rendering ───────────────────────────────────────────────────────────────
+function spFmtTime(ms) {
+  if (!ms) return '0:00';
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2,'0')}`;
+}
+
+function spRenderConnectPrompt() {
+  document.getElementById('spotifyCard').innerHTML = `
+    <div class="sp-idle">
+      <div class="sp-idle-icon">🎵</div>
+      <div class="sp-idle-text">Connect Spotify to see what's playing</div>
+      <button class="sp-connect-btn" onclick="spotifyLogin()">♫ Connect Spotify</button>
+    </div>`;
+  document.getElementById('spHeaderBtn').innerHTML = '';
+}
+
+function spRenderIdle(msg = '') {
+  document.getElementById('spotifyCard').innerHTML = `
+    <div class="sp-idle">
+      <div class="sp-idle-icon">🎵</div>
+      <div class="sp-idle-text">${msg || 'Connect Spotify to see what\'s playing'}</div>
+      <button class="sp-connect-btn" onclick="spotifyLogin()">♫ Connect Spotify</button>
+    </div>`;
+  document.getElementById('spHeaderBtn').innerHTML = '';
+}
+
+function spRenderNothing() {
+  clearInterval(spProgressTimer);
+  document.getElementById('spotifyCard').innerHTML = `
+    <div class="sp-nothing">Nothing playing right now</div>`;
+  document.getElementById('spHeaderBtn').innerHTML =
+    `<button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
+}
+
+function spRenderTrack(data) {
+  const track  = data.item;
+  const art    = track.album?.images?.[0]?.url || '';
+  const name   = track.name || '—';
+  const artist = track.artists?.map(a => a.name).join(', ') || '—';
+  const album  = track.album?.name || '';
+  const pct    = spDurationMs ? Math.round((spCurrentMs / spDurationMs) * 100) : 0;
+
+  document.getElementById('spotifyCard').innerHTML = `
+    <div class="sp-now-playing">
+      ${art ? `<img class="sp-album-art ${data.is_playing ? 'spinning' : ''}" src="${art}" alt="Album art" id="spAlbumArt">` :
+               `<div class="sp-album-art" style="display:flex;align-items:center;justify-content:center;font-size:2rem">🎵</div>`}
+      <div class="sp-track-info">
+        <div class="sp-track-name" title="${name}">${name}</div>
+        <div class="sp-artist">${artist}</div>
+        <div class="sp-album">${album}</div>
+        <div class="sp-progress-wrap">
+          <div class="sp-progress-bar">
+            <div class="sp-progress-fill" id="spProgressFill" style="width:${pct}%"></div>
+          </div>
+          <div class="sp-times">
+            <span id="spCurrentTime">${spFmtTime(spCurrentMs)}</span>
+            <span>${spFmtTime(spDurationMs)}</span>
+          </div>
+        </div>
+        <div class="sp-state-row">
+          ${data.is_playing
+            ? `<span class="sp-playing-badge">PLAYING</span>`
+            : `<span class="sp-paused-badge">⏸ PAUSED</span>`}
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('spHeaderBtn').innerHTML =
+    `<button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
+}
+
+function spUpdateProgress() {
+  const fill = document.getElementById('spProgressFill');
+  const time = document.getElementById('spCurrentTime');
+  if (fill && spDurationMs) {
+    fill.style.width = Math.min(100, (spCurrentMs / spDurationMs) * 100) + '%';
+  }
+  if (time) time.textContent = spFmtTime(spCurrentMs);
+}
+
+// ─── Settings panel sync ─────────────────────────────────────────────────────
+function spUpdateSettingsPanel() {
+  const connected     = !!localStorage.getItem('sp_access_token');
+  const connectBtn    = document.getElementById('spSettingsConnectBtn');
+  const disconnectBtn = document.getElementById('spSettingsDisconnectBtn');
+  const status        = document.getElementById('spSettingsStatus');
+  const uriDisplay    = document.getElementById('spRedirectUriDisplay');
+  const warning       = document.getElementById('spServerWarning');
+
+  const isFile = window.location.protocol === 'file:';
+
+  if (uriDisplay) {
+    uriDisplay.textContent = isFile
+      ? 'Run the local server first (start.command / start.bat), then reopen settings.'
+      : 'http://127.0.0.1:8888/';
+  }
+  if (warning) warning.style.display = isFile ? '' : 'none';
+
+  if (!connectBtn) return;
+
+  if (connected) {
+    connectBtn.style.display    = 'none';
+    disconnectBtn.style.display = '';
+    if (status) status.innerHTML = `<div style="color:#1db954;font-size:.8rem">✓ Connected to Spotify</div>`;
+  } else {
+    connectBtn.style.display    = '';
+    disconnectBtn.style.display = 'none';
+    connectBtn.disabled = isFile;
+    if (status) status.innerHTML = isFile
+      ? `<div style="color:var(--accent2);font-size:.8rem">⚠️ Open via local server to connect</div>`
+      : `<div style="color:var(--muted);font-size:.8rem">Not connected</div>`;
+  }
+}
+
+// ─── Init: check for OAuth callback or existing token ────────────────────────
+async function spInit() {
+  // Pre-fill client ID if saved
+  const clientIdInput = document.getElementById('cfgSpClientId');
+  if (clientIdInput && cfg.spotifyClientId) clientIdInput.value = cfg.spotifyClientId;
+
+  // Warn immediately if opened as file:// — Spotify OAuth will not work
+  if (window.location.protocol === 'file:') {
+    document.getElementById('spotifyCard').innerHTML = `
+      <div class="sp-idle">
+        <div class="sp-idle-icon">⚠️</div>
+        <div class="sp-idle-text" style="color:var(--accent2)">
+          <strong>Run via the local server</strong><br>
+          <span style="font-size:.7rem">Double-click <strong>start.command</strong> (Mac) or <strong>start.bat</strong> (Windows),<br>
+          then open the address it shows in your browser.</span>
+        </div>
+      </div>`;
+    spUpdateSettingsPanel();
+    return;
+  }
+
+  // Handle OAuth callback (code= in URL query string)
+  if (window.location.search.includes('code=')) {
+    // Show loading state while exchanging token
+    document.getElementById('spotifyCard').innerHTML = `
+      <div class="sp-idle">
+        <div class="sp-idle-icon">🎵</div>
+        <div class="sp-idle-text">Connecting to Spotify…</div>
+      </div>`;
+    await spHandleCallback();
+    spUpdateSettingsPanel();
+    return;
+  }
+
+  // Resume from saved token
+  const token = await spGetToken().catch(() => null);
+  if (token) {
+    spStartPolling();
+  } else {
+    spRenderConnectPrompt();
+  }
+
+  spUpdateSettingsPanel();
+}
+
+// ═══════════════════════════════════════════════════
+// APP INIT & REFRESH LOOP
+// ═══════════════════════════════════════════════════
+function startApp() {
+  if (clockInterval)   clearInterval(clockInterval);
+  if (refreshInterval) clearInterval(refreshInterval);
+
+  updateClock();
+  clockInterval = setInterval(updateClock, 1000);
+
+  fetchNtuBus();
+
+  const interval = Math.max(15, cfg.refresh) * 1000;
+  refreshInterval = setInterval(fetchNtuBus, interval);
+}
+
+// ── First boot ──
+window.addEventListener('load', () => {
+  startApp();
+  spInit();
+});
+</script>
+</body>
+</html>
