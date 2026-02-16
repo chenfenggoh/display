@@ -719,6 +719,103 @@
       padding: 16px 0;
     }
 
+    /* Playback controls */
+    .sp-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .sp-ctrl-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 50%;
+      width: 34px;
+      height: 34px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .sp-ctrl-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,.06); }
+    .sp-ctrl-btn.sp-play-btn {
+      width: 40px;
+      height: 40px;
+      font-size: 1rem;
+      border-color: #1db954;
+      color: #1db954;
+    }
+    .sp-ctrl-btn.sp-play-btn:hover { background: rgba(29,185,84,.12); }
+    .sp-ctrl-btn.sp-shuffle-on { border-color: #1db954; color: #1db954; }
+    .sp-ctrl-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* Clickable seek progress bar */
+    .sp-progress-bar { cursor: pointer; position: relative; }
+    .sp-progress-bar:hover .sp-progress-fill { background: #1db954; }
+
+    /* Context label (playlist name) */
+    .sp-context {
+      font-size: .6rem;
+      color: var(--muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Pinned playlist quick-launch buttons */
+    .sp-quick-playlists {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 8px;
+    }
+    .sp-pl-btn {
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: .65rem;
+      cursor: pointer;
+      white-space: nowrap;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all .15s;
+      font-family: var(--font-body);
+    }
+    .sp-pl-btn:hover { border-color: #1db954; color: #1db954; background: rgba(29,185,84,.08); }
+    .sp-pl-btn.playing { border-color: #1db954; color: #1db954; background: rgba(29,185,84,.12); }
+
+    /* Playlist list in settings */
+    .sp-pl-list-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .12s;
+    }
+    .sp-pl-list-item:last-child { border-bottom: none; }
+    .sp-pl-list-item:hover { background: rgba(0,229,255,.05); }
+    .sp-pl-list-item.pinned { background: rgba(29,185,84,.06); }
+    .sp-pl-list-item .sp-pl-img {
+      width: 28px; height: 28px;
+      border-radius: 4px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: var(--border);
+    }
+    .sp-pl-list-item .sp-pl-name { flex: 1; font-size: .78rem; color: var(--text); }
+    .sp-pl-list-item .sp-pl-check { font-size: .75rem; color: #1db954; width: 16px; text-align: center; }
+
     /* Config panel */
     .config-btn {
       position: fixed;
@@ -1302,6 +1399,22 @@
         <button class="sp-connect-btn" id="spSettingsConnectBtn" onclick="spotifyLoginFromSettings()">♫ Connect Spotify</button>
         <button class="sp-disconnect-btn" id="spSettingsDisconnectBtn" onclick="spotifyLogout()" style="display:none">Disconnect</button>
       </div>
+
+      <!-- Pinned playlists section — only shown when connected -->
+      <div id="spPlaylistSection" style="display:none;margin-top:16px">
+        <div class="field">
+          <label>Quick-Launch Playlists <span style="color:var(--muted)">(pin up to 6)</span></label>
+          <div id="spPinnedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:28px"></div>
+          <div class="stop-search-wrap" style="margin-bottom:6px">
+            <span class="stop-search-icon">🔍</span>
+            <input class="stop-search" id="spPlaylistSearch" type="text"
+              placeholder="Search your playlists…"
+              oninput="spFilterPlaylists(this.value)" autocomplete="off" />
+          </div>
+          <div id="spPlaylistList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+          <small style="margin-top:4px;display:block">Pinned playlists appear as buttons on the Now Playing card.</small>
+        </div>
+      </div>
     </div>
 
     <!-- ── TAB: API KEYS ── -->
@@ -1440,6 +1553,7 @@ const DEFAULT_CONFIG = {
   weatherCity:     '',
   refresh:         30,
   spotifyClientId: '',
+  spPinnedPlaylists: [],  // [{id, name}] pinned for quick-launch
 };
 
 let cfg = loadConfig();
@@ -1811,7 +1925,7 @@ function fetchNtuBus() {
 // developer.spotify.com and pastes the Client ID.
 // ═══════════════════════════════════════════════════
 
-const SP_SCOPES      = 'user-read-currently-playing user-read-playback-state';
+const SP_SCOPES      = 'user-read-currently-playing user-read-playback-state user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read';
 const SP_API_BASE    = 'https://api.spotify.com/v1';
 const SP_AUTH_URL    = 'https://accounts.spotify.com/authorize';
 const SP_TOKEN_URL   = 'https://accounts.spotify.com/api/token';
@@ -1822,6 +1936,9 @@ let spProgressTimer = null;
 let spCurrentMs     = 0;   // local progress counter
 let spDurationMs    = 0;
 let spIsPlaying     = false;
+let spShuffleOn     = false;
+let spPlaylists     = [];   // cached user playlists [{id,name,images}]
+let spSeekingNow    = false; // debounce flag
 
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
 function spRedirectUri() {
@@ -2050,30 +2167,56 @@ function spRenderIdle(msg = '') {
 
 function spRenderNothing() {
   clearInterval(spProgressTimer);
+  const pins = cfg.spPinnedPlaylists || [];
+  const pinHtml = pins.length ? `
+    <div class="sp-quick-playlists">
+      ${pins.map(p => `<button class="sp-pl-btn" onclick="spPlayPlaylist('${p.id}')" title="${p.name}">▶ ${p.name}</button>`).join('')}
+    </div>` : '';
   document.getElementById('spotifyCard').innerHTML = `
-    <div class="sp-nothing">Nothing playing right now</div>`;
+    <div class="sp-nothing">Nothing playing right now</div>
+    ${pinHtml}`;
   document.getElementById('spHeaderBtn').innerHTML =
     `<button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
 }
 
 function spRenderTrack(data) {
-  const track  = data.item;
-  const art    = track.album?.images?.[0]?.url || '';
-  const name   = track.name || '—';
-  const artist = track.artists?.map(a => a.name).join(', ') || '—';
-  const album  = track.album?.name || '';
-  const pct    = spDurationMs ? Math.round((spCurrentMs / spDurationMs) * 100) : 0;
+  const track   = data.item;
+  const art     = track.album?.images?.[0]?.url || '';
+  const name    = track.name || '—';
+  const artist  = track.artists?.map(a => a.name).join(', ') || '—';
+  const album   = track.album?.name || '';
+  const pct     = spDurationMs ? Math.round((spCurrentMs / spDurationMs) * 100) : 0;
+  const playing = data.is_playing;
+  spShuffleOn   = data.shuffle_state || false;
+
+  // Context (playlist name)
+  let contextHtml = '';
+  if (data.context?.type === 'playlist' && data.context.uri) {
+    const ctxId   = data.context.uri.split(':').pop();
+    const pinned  = (cfg.spPinnedPlaylists || []).find(p => p.id === ctxId);
+    const ctxName = pinned?.name || '▶ Playlist';
+    contextHtml = `<div class="sp-context">🎵 ${ctxName}</div>`;
+  }
+
+  // Pinned playlist quick-launch buttons
+  const pins = cfg.spPinnedPlaylists || [];
+  const currentCtxId = data.context?.uri?.split(':').pop();
+  const pinHtml = pins.length ? `
+    <div class="sp-quick-playlists">
+      ${pins.map(p => `<button class="sp-pl-btn${p.id === currentCtxId ? ' playing' : ''}" onclick="spPlayPlaylist('${p.id}')" title="${p.name}">▶ ${p.name}</button>`).join('')}
+    </div>` : '';
 
   document.getElementById('spotifyCard').innerHTML = `
     <div class="sp-now-playing">
-      ${art ? `<img class="sp-album-art ${data.is_playing ? 'spinning' : ''}" src="${art}" alt="Album art" id="spAlbumArt">` :
+      ${art ? `<img class="sp-album-art ${playing ? 'spinning' : ''}" src="${art}" alt="Album art" id="spAlbumArt">` :
                `<div class="sp-album-art" style="display:flex;align-items:center;justify-content:center;font-size:2rem">🎵</div>`}
       <div class="sp-track-info">
         <div class="sp-track-name" title="${name}">${name}</div>
         <div class="sp-artist">${artist}</div>
         <div class="sp-album">${album}</div>
+        ${contextHtml}
         <div class="sp-progress-wrap">
-          <div class="sp-progress-bar">
+          <div class="sp-progress-bar" id="spProgressBar" onclick="spSeekClick(event)" title="Click to seek">
             <div class="sp-progress-fill" id="spProgressFill" style="width:${pct}%"></div>
           </div>
           <div class="sp-times">
@@ -2081,13 +2224,17 @@ function spRenderTrack(data) {
             <span>${spFmtTime(spDurationMs)}</span>
           </div>
         </div>
-        <div class="sp-state-row">
-          ${data.is_playing
-            ? `<span class="sp-playing-badge">PLAYING</span>`
-            : `<span class="sp-paused-badge">⏸ PAUSED</span>`}
+        <div class="sp-controls">
+          <button class="sp-ctrl-btn${spShuffleOn ? ' sp-shuffle-on' : ''}" onclick="spToggleShuffle()" title="Shuffle">⇌</button>
+          <button class="sp-ctrl-btn" onclick="spPrev()" title="Previous">⏮</button>
+          <button class="sp-ctrl-btn sp-play-btn" onclick="spTogglePlay()" title="${playing ? 'Pause' : 'Play'}" id="spPlayBtn">
+            ${playing ? '⏸' : '▶'}
+          </button>
+          <button class="sp-ctrl-btn" onclick="spNext()" title="Next">⏭</button>
         </div>
       </div>
-    </div>`;
+    </div>
+    ${pinHtml}`;
 
   document.getElementById('spHeaderBtn').innerHTML =
     `<button class="sp-disconnect-btn" onclick="spotifyLogout()">Disconnect</button>`;
@@ -2102,22 +2249,209 @@ function spUpdateProgress() {
   if (time) time.textContent = spFmtTime(spCurrentMs);
 }
 
+// ─── Playback controls ────────────────────────────────────────────────────────
+async function spApiPost(path, body) {
+  const token = await spGetToken().catch(() => null);
+  if (!token) return false;
+  const opts = { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } };
+  if (body !== undefined) {
+    opts.method  = 'PUT';
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body    = JSON.stringify(body);
+  }
+  const res = await fetch(`${SP_API_BASE}${path}`, opts);
+  return res.ok || res.status === 204;
+}
+
+async function spApiAction(path) {
+  const token = await spGetToken().catch(() => null);
+  if (!token) return false;
+  const res = await fetch(`${SP_API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  return res.ok || res.status === 204;
+}
+
+async function spTogglePlay() {
+  const btn = document.getElementById('spPlayBtn');
+  if (btn) btn.disabled = true;
+  if (spIsPlaying) {
+    await fetch(`${SP_API_BASE}/me/player/pause`, {
+      method: 'PUT', headers: { 'Authorization': `Bearer ${await spGetToken()}` }
+    });
+    spIsPlaying = false;
+    clearInterval(spProgressTimer);
+  } else {
+    await fetch(`${SP_API_BASE}/me/player/play`, {
+      method: 'PUT', headers: { 'Authorization': `Bearer ${await spGetToken()}` }
+    });
+    spIsPlaying = true;
+    spProgressTimer = setInterval(() => {
+      spCurrentMs = Math.min(spCurrentMs + 1000, spDurationMs);
+      spUpdateProgress();
+    }, 1000);
+  }
+  if (btn) { btn.textContent = spIsPlaying ? '⏸' : '▶'; btn.disabled = false; }
+  setTimeout(fetchNowPlaying, 600);
+}
+
+async function spNext() {
+  await spApiAction('/me/player/next');
+  setTimeout(fetchNowPlaying, 600);
+}
+
+async function spPrev() {
+  // If > 3 seconds in, restart track; else go truly previous
+  if (spCurrentMs > 3000) {
+    await spApiPost('/me/player/seek?position_ms=0');
+  } else {
+    await spApiAction('/me/player/previous');
+  }
+  setTimeout(fetchNowPlaying, 600);
+}
+
+async function spToggleShuffle() {
+  spShuffleOn = !spShuffleOn;
+  await spApiPost(`/me/player/shuffle?state=${spShuffleOn}`);
+  // Update button visually immediately
+  const btn = document.querySelector('.sp-ctrl-btn[onclick="spToggleShuffle()"]');
+  if (btn) btn.className = `sp-ctrl-btn${spShuffleOn ? ' sp-shuffle-on' : ''}`;
+}
+
+async function spSeekClick(e) {
+  if (!spDurationMs || spSeekingNow) return;
+  spSeekingNow = true;
+  const bar  = e.currentTarget;
+  const pct  = e.offsetX / bar.offsetWidth;
+  const posMs = Math.round(pct * spDurationMs);
+  spCurrentMs = posMs;
+  spUpdateProgress();
+  await spApiPost(`/me/player/seek?position_ms=${posMs}`);
+  spSeekingNow = false;
+  setTimeout(fetchNowPlaying, 800);
+}
+
+async function spPlayPlaylist(playlistId) {
+  const token = await spGetToken().catch(() => null);
+  if (!token) return;
+  await fetch(`${SP_API_BASE}/me/player/play`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ context_uri: `spotify:playlist:${playlistId}` }),
+  });
+  spSetPollRate(true);
+  setTimeout(fetchNowPlaying, 800);
+}
+
+// ─── Playlist management (settings) ─────────────────────────────────────────
+async function spLoadPlaylists() {
+  const token = await spGetToken().catch(() => null);
+  if (!token) return;
+  try {
+    let all = [], url = `${SP_API_BASE}/me/playlists?limit=50`;
+    while (url && all.length < 200) {
+      const res  = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) break;
+      const data = await res.json();
+      all.push(...(data.items || []));
+      url = data.next;
+    }
+    spPlaylists = all.filter(Boolean).map(p => ({
+      id: p.id,
+      name: p.name,
+      img: p.images?.[0]?.url || '',
+      tracks: p.tracks?.total || 0,
+    }));
+    spRenderPlaylistList('');
+  } catch (e) {
+    console.warn('spLoadPlaylists:', e.message);
+  }
+}
+
+function spRenderPlaylistList(query) {
+  const container = document.getElementById('spPlaylistList');
+  if (!container) return;
+  const q       = query.trim().toLowerCase();
+  const pinned  = cfg.spPinnedPlaylists || [];
+  const pinnedIds = new Set(pinned.map(p => p.id));
+
+  let results = q
+    ? spPlaylists.filter(p => p.name.toLowerCase().includes(q))
+    : [...spPlaylists].sort((a,b) => (pinnedIds.has(b.id) ? 1 : 0) - (pinnedIds.has(a.id) ? 1 : 0));
+
+  if (!results.length) {
+    container.innerHTML = `<div style="padding:12px;text-align:center;color:var(--muted);font-size:.78rem">${q ? `No playlists matching "${query}"` : 'No playlists found'}</div>`;
+    return;
+  }
+
+  container.innerHTML = results.slice(0, 80).map(p => {
+    const isPinned = pinnedIds.has(p.id);
+    return `<div class="sp-pl-list-item${isPinned ? ' pinned' : ''}" onclick="spTogglePin('${p.id}', '${p.name.replace(/'/g,"\\'")}')">
+      ${p.img ? `<img class="sp-pl-img" src="${p.img}" loading="lazy">` : `<div class="sp-pl-img" style="display:flex;align-items:center;justify-content:center">🎵</div>`}
+      <span class="sp-pl-name">${p.name}</span>
+      <span class="sp-pl-check">${isPinned ? '★' : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+function spFilterPlaylists(q) { spRenderPlaylistList(q); }
+
+function spTogglePin(id, name) {
+  const pins = cfg.spPinnedPlaylists || [];
+  const idx  = pins.findIndex(p => p.id === id);
+  if (idx > -1) {
+    pins.splice(idx, 1);
+  } else {
+    if (pins.length >= 6) {
+      const chip = document.getElementById('spPinnedChips');
+      if (chip) { chip.style.outline = '1px solid var(--danger)'; setTimeout(() => chip.style.outline = '', 800); }
+      return;
+    }
+    pins.push({ id, name });
+  }
+  cfg.spPinnedPlaylists = pins;
+  localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
+  spRenderPinnedChips();
+  spRenderPlaylistList(document.getElementById('spPlaylistSearch')?.value || '');
+}
+
+function spRenderPinnedChips() {
+  const container = document.getElementById('spPinnedChips');
+  if (!container) return;
+  const pins = cfg.spPinnedPlaylists || [];
+  if (!pins.length) {
+    container.innerHTML = `<span style="color:var(--muted);font-size:.72rem">None yet — click a playlist below to pin it (★)</span>`;
+    return;
+  }
+  container.innerHTML = pins.map(p =>
+    `<span class="sel-chip">${p.name}<button onclick="spTogglePin('${p.id}','${p.name.replace(/'/g,"\\'")}')">×</button></span>`
+  ).join('');
+}
+
 // ─── Settings panel sync ─────────────────────────────────────────────────────
 function spUpdateSettingsPanel() {
   const connected     = !!localStorage.getItem('sp_access_token');
   const connectBtn    = document.getElementById('spSettingsConnectBtn');
   const disconnectBtn = document.getElementById('spSettingsDisconnectBtn');
   const status        = document.getElementById('spSettingsStatus');
+  const plSection     = document.getElementById('spPlaylistSection');
   if (!connectBtn) return;
 
   if (connected) {
     connectBtn.style.display    = 'none';
     disconnectBtn.style.display = '';
-    if (status) status.innerHTML = `<div style="color:#1db954;font-size:.8rem">✓ Connected to Spotify</div>`;
+    if (status)    status.innerHTML = `<div style="color:#1db954;font-size:.8rem">✓ Connected to Spotify</div>`;
+    if (plSection) plSection.style.display = '';
+    spRenderPinnedChips();
+    // Load playlists if not yet cached
+    if (!spPlaylists.length) spLoadPlaylists();
+    else spRenderPlaylistList(document.getElementById('spPlaylistSearch')?.value || '');
   } else {
     connectBtn.style.display    = '';
     disconnectBtn.style.display = 'none';
-    if (status) status.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Not connected</div>`;
+    if (status)    status.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Not connected</div>`;
+    if (plSection) plSection.style.display = 'none';
   }
 }
 
