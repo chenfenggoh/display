@@ -921,6 +921,27 @@
     .sel-chip button:hover { opacity: 1; }
     .sel-hint { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
 
+    /* Weather location search results */
+    .loc-result-list {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .loc-result-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .loc-result-item:last-child { border-bottom: none; }
+    .loc-result-item:hover, .loc-result-item.selected { background: rgba(0,229,255,.07); }
+    .loc-result-item .loc-name { font-size: .82rem; color: var(--text); flex: 1; }
+    .loc-result-item .loc-meta { font-size: .65rem; color: var(--muted); font-family: var(--font-mono); }
+
     /* NTU route picker checkboxes */
     .route-toggles {
       display: flex;
@@ -1287,9 +1308,26 @@
     <div class="cfg-pane" id="pane-api">
       <div class="field">
         <label>OpenWeatherMap API Key <span style="color:var(--accent2)">*</span></label>
-        <input type="text" id="cfgWeatherKey" placeholder="e.g. 6700d5059665b3a2e3abbe0ac5c7ba60" />
+        <input type="text" id="cfgWeatherKey" placeholder="e.g. 6700d5059665b3a2e3abbe0ac5c7ba60" oninput="clearLocResults()" />
         <small>Required for weather. Free at <strong>openweathermap.org</strong> → API keys → Free tier.</small>
       </div>
+
+      <div class="field" style="margin-top:14px">
+        <label>Weather Location</label>
+        <div style="display:flex;gap:8px;align-items:stretch">
+          <div class="stop-search-wrap" style="flex:1;margin:0">
+            <span class="stop-search-icon">🌍</span>
+            <input class="stop-search" id="cfgLocSearch" type="text"
+              placeholder="Search city, e.g. Singapore, Tokyo…"
+              oninput="searchWeatherLoc(this.value)" autocomplete="off" />
+          </div>
+          <button class="refresh-btn" style="padding:0 10px;white-space:nowrap" onclick="useDeviceLocation()" title="Use device GPS">📍 GPS</button>
+        </div>
+        <div id="cfgLocResults" style="margin-top:4px"></div>
+        <div id="cfgLocSelected" style="margin-top:6px;font-size:.75rem;color:var(--accent)"></div>
+        <small style="margin-top:4px;display:block">Leave blank to use device GPS automatically.</small>
+      </div>
+
       <div class="field" style="margin-top:12px">
         <label>LTA DataMall API Key <span style="color:var(--muted)">(optional)</span></label>
         <input type="text" id="cfgLtaKey" placeholder="e.g. AbCd1234efGh5678==" />
@@ -1397,6 +1435,9 @@ const DEFAULT_CONFIG = {
   busStops:        [],
   ltaKey:          '',
   weatherKey:      '',
+  weatherLat:      null,
+  weatherLon:      null,
+  weatherCity:     '',
   refresh:         30,
   spotifyClientId: '',
 };
@@ -1475,6 +1516,9 @@ function saveConfig() {
   const wxEl = document.getElementById('cfgWeatherKey');
   if (wxEl) cfg.weatherKey = wxEl.value.trim();
 
+  // Weather location — saved by pickWeatherLoc() / useDeviceLocation()
+  // cfg.weatherLat, cfg.weatherLon, cfg.weatherCity already updated live
+
   // Spotify client ID
   const spIdEl = document.getElementById('cfgSpClientId');
   if (spIdEl) cfg.spotifyClientId = spIdEl.value.trim();
@@ -1503,6 +1547,20 @@ function openConfig() {
   if (ltaEl) ltaEl.value = cfg.ltaKey || '';
   const wxEl = document.getElementById('cfgWeatherKey');
   if (wxEl) wxEl.value = cfg.weatherKey || '';
+
+  // Weather location display
+  const locSel = document.getElementById('cfgLocSelected');
+  if (locSel) {
+    if (cfg.weatherCity) {
+      locSel.textContent = `📍 Current: ${cfg.weatherCity} (${parseFloat(cfg.weatherLat).toFixed(3)}, ${parseFloat(cfg.weatherLon).toFixed(3)})`;
+    } else {
+      locSel.textContent = '📍 Using device GPS (no location saved)';
+    }
+  }
+  const locInput = document.getElementById('cfgLocSearch');
+  if (locInput) locInput.value = '';
+  const locRes = document.getElementById('cfgLocResults');
+  if (locRes) locRes.innerHTML = '';
 
   // Bus stops
   selectedStops = [...(cfg.busStops || [])];
@@ -2119,7 +2177,7 @@ function wxHeatIndex(tempC, rh) {
   return ((hi - 32) * 5/9).toFixed(1);
 }
 
-function renderWeather({ temp, feels, hum, wind, desc, code, hi }) {
+function renderWeather({ temp, feels, hum, wind, desc, code, hi, city }) {
   const el = document.getElementById('weatherContent');
   if (!el) return;
   const icon = wxIcon(code, desc);
@@ -2129,6 +2187,7 @@ function renderWeather({ temp, feels, hum, wind, desc, code, hi }) {
       <div>
         <div class="weather-temp">${parseFloat(temp).toFixed(1)}<span class="weather-unit">°C</span></div>
         <div class="weather-desc">${desc}</div>
+        ${city ? `<div style="font-size:.65rem;color:var(--muted);margin-top:2px">📍 ${city}</div>` : ''}
       </div>
     </div>
     <div class="weather-details">
@@ -2151,9 +2210,105 @@ function renderWeather({ temp, feels, hum, wind, desc, code, hi }) {
     </div>`;
 }
 
+// ═══════════════════════════════════════════════════
+// WEATHER LOCATION SEARCH (OWM Geocoding API)
+// ═══════════════════════════════════════════════════
+let _locSearchTimer = null;
+
+function clearLocResults() {
+  const r = document.getElementById('cfgLocResults');
+  if (r) r.innerHTML = '';
+}
+
+function searchWeatherLoc(query) {
+  clearTimeout(_locSearchTimer);
+  const q = query.trim();
+  const res = document.getElementById('cfgLocResults');
+  if (!res) return;
+  if (q.length < 2) { res.innerHTML = ''; return; }
+
+  const key = document.getElementById('cfgWeatherKey')?.value.trim() || cfg.weatherKey;
+  if (!key) {
+    res.innerHTML = `<div style="padding:8px 10px;font-size:.75rem;color:var(--accent2)">Enter your API key first</div>`;
+    return;
+  }
+
+  _locSearchTimer = setTimeout(async () => {
+    res.innerHTML = `<div style="padding:8px 10px;font-size:.75rem;color:var(--muted)">Searching…</div>`;
+    try {
+      const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(q)}&limit=8&appid=${key}`;
+      const r2  = await fetch(url);
+      const data = await r2.json();
+      if (!r2.ok) throw new Error(data.message || `Error ${r2.status}`);
+      if (!data.length) {
+        res.innerHTML = `<div style="padding:8px 10px;font-size:.75rem;color:var(--muted)">No locations found for "${q}"</div>`;
+        return;
+      }
+      res.innerHTML = `<div class="loc-result-list">${
+        data.map((loc, i) => {
+          const label = [loc.name, loc.state, loc.country].filter(Boolean).join(', ');
+          const coords = `${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`;
+          const isCur  = cfg.weatherLat != null && Math.abs(cfg.weatherLat - loc.lat) < 0.01 && Math.abs(cfg.weatherLon - loc.lon) < 0.01;
+          return `<div class="loc-result-item ${isCur ? 'selected' : ''}"
+            onclick="pickWeatherLoc(${loc.lat}, ${loc.lon}, '${label.replace(/'/g,"\\'")}')">
+            <span class="loc-name">${label}</span>
+            <span class="loc-meta">${coords}</span>
+          </div>`;
+        }).join('')
+      }</div>`;
+    } catch (e) {
+      res.innerHTML = `<div style="padding:8px 10px;font-size:.75rem;color:var(--accent2)">Error: ${e.message}</div>`;
+    }
+  }, 400);
+}
+
+function pickWeatherLoc(lat, lon, city) {
+  cfg.weatherLat  = lat;
+  cfg.weatherLon  = lon;
+  cfg.weatherCity = city;
+  localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
+
+  const locSel = document.getElementById('cfgLocSelected');
+  if (locSel) locSel.textContent = `✅ Set to: ${city} (${parseFloat(lat).toFixed(3)}, ${parseFloat(lon).toFixed(3)})`;
+
+  const res = document.getElementById('cfgLocResults');
+  if (res) res.innerHTML = '';
+  const inp = document.getElementById('cfgLocSearch');
+  if (inp) inp.value = '';
+
+  fetchWeather();  // preview immediately
+}
+
+function useDeviceLocation() {
+  const locSel = document.getElementById('cfgLocSelected');
+  if (!navigator.geolocation) {
+    if (locSel) locSel.textContent = '⚠️ GPS not available on this device';
+    return;
+  }
+  if (locSel) locSel.textContent = '⏳ Getting GPS position…';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      cfg.weatherLat  = pos.coords.latitude;
+      cfg.weatherLon  = pos.coords.longitude;
+      cfg.weatherCity = '';  // blank = "device GPS"
+      localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
+      if (locSel) locSel.textContent = `✅ Using GPS: ${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`;
+      fetchWeather();
+    },
+    err => {
+      if (locSel) locSel.textContent = `⚠️ GPS error: ${err.message}`;
+    },
+    { timeout: 8000, maximumAge: 60000 }
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// WEATHER — OpenWeatherMap (lat/lon or device GPS)
+// ═══════════════════════════════════════════════════
 async function fetchWeather() {
   const key = cfg.weatherKey ? cfg.weatherKey.trim() : '';
   const el  = document.getElementById('weatherContent');
+
   if (!key) {
     if (el) el.innerHTML = `<div class="sp-idle" style="padding:12px 0">
       <div class="sp-idle-icon">🌡️</div>
@@ -2161,15 +2316,17 @@ async function fetchWeather() {
     </div>`;
     return;
   }
-  try {
-    // Use city name query as primary — more reliable than lat/lon on free tier
-    const url = `https://api.openweathermap.org/data/2.5/weather?q=Jurong+West,SG&appid=${key}&units=metric`;
+
+  // Build URL: prefer saved lat/lon, else try device GPS, else fail gracefully
+  const buildAndFetch = async (lat, lon) => {
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${key}&units=metric`;
     const res  = await fetch(url);
     const body = await res.json();
-    if (!res.ok) {
-      // OWM returns {"cod":401,"message":"Invalid API key..."} etc.
-      throw new Error(body.message || `Error ${res.status}`);
-    }
+    if (!res.ok) throw new Error(body.message || `Error ${res.status}`);
+    return body;
+  };
+
+  const render = (body) => {
     const temp  = body.main.temp;
     const feels = body.main.feels_like;
     const hum   = body.main.humidity;
@@ -2177,12 +2334,44 @@ async function fetchWeather() {
     const desc  = body.weather[0].description.replace(/\b\w/g, c => c.toUpperCase());
     const code  = body.weather[0].id;
     const hi    = wxHeatIndex(temp, hum);
-    renderWeather({ temp, feels, hum, wind, desc, code, hi });
+    const city  = cfg.weatherCity || body.name || 'Current Location';
+    renderWeather({ temp, feels, hum, wind, desc, code, hi, city });
+  };
+
+  try {
+    if (cfg.weatherLat != null && cfg.weatherLon != null) {
+      // Saved location — use directly
+      render(await buildAndFetch(cfg.weatherLat, cfg.weatherLon));
+    } else {
+      // No saved location — try device GPS
+      if (el) el.innerHTML = `<div class="sp-idle" style="padding:12px 0">
+        <div class="sp-idle-icon">📍</div>
+        <div class="sp-idle-text">Getting location…</div>
+      </div>`;
+      await new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error('GPS unavailable'));
+        navigator.geolocation.getCurrentPosition(
+          async pos => {
+            try {
+              cfg.weatherLat = pos.coords.latitude;
+              cfg.weatherLon = pos.coords.longitude;
+              render(await buildAndFetch(cfg.weatherLat, cfg.weatherLon));
+              resolve();
+            } catch (e) { reject(e); }
+          },
+          err => reject(new Error(err.message || 'GPS denied')),
+          { timeout: 8000, maximumAge: 300000 }
+        );
+      });
+    }
   } catch (e) {
     console.warn('Weather fetch error:', e.message);
     if (el) el.innerHTML = `<div class="sp-idle" style="padding:12px 0">
       <div class="sp-idle-icon">⚠️</div>
-      <div class="sp-idle-text" style="color:var(--accent2)">Weather error:<br><small style="word-break:break-word">${e.message}</small></div>
+      <div class="sp-idle-text" style="color:var(--accent2)">Weather error:<br>
+        <small style="word-break:break-word">${e.message}</small><br>
+        <small style="color:var(--muted)">Set location in ⚙ Settings → API Keys</small>
+      </div>
     </div>`;
   }
 }
