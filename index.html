@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://api.data.gov.sg https://arrivelah2.busrouter.sg; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://api.data.gov.sg https://arrivelah2.busrouter.sg https://api.openweathermap.org; img-src 'self' data: blob: https://*.scdn.co https://*.spotifycdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
   <title>NTU Smart Display</title>
   <style>
     /* Fallback font stack while Google Fonts loads (or on file://) */
@@ -164,19 +164,23 @@
     /* ─── MAIN GRID ─── */
     .main-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 2fr;
-      grid-template-rows: 1fr;
+      grid-template-columns: 1fr 1fr 1fr 2fr;
+      grid-template-rows: auto auto;
       gap: 16px;
       align-items: start;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
+      .main-grid { grid-template-columns: 1fr 1fr 2fr; }
+      .public-bus-section { grid-column: 1 / -1; }
+    }
+    @media (max-width: 750px) {
       .main-grid { grid-template-columns: 1fr 1fr; }
       .bus-section { grid-column: 1 / -1; }
+      .public-bus-section { grid-column: 1 / -1; }
     }
-    @media (max-width: 600px) {
+    @media (max-width: 500px) {
       .main-grid { grid-template-columns: 1fr; }
-      .bus-section { grid-column: 1; }
     }
 
     /* ─── CARDS ─── */
@@ -228,13 +232,121 @@
       margin-top: 4px;
     }
 
-    /* ─── BUS SECTION ─── */
+    /* ─── WEATHER ─── */
+    .weather-main {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+    .weather-icon { font-size: 3rem; line-height: 1; }
+    .weather-temp {
+      font-family: var(--font-display);
+      font-size: 2.6rem;
+      color: var(--warning);
+      line-height: 1;
+    }
+    .weather-unit { font-size: 1.1rem; color: var(--muted); }
+    .weather-desc { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .weather-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .weather-detail {
+      background: rgba(0,229,255,.04);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 6px 9px;
+    }
+    .weather-detail .wlabel {
+      font-family: var(--font-mono);
+      font-size: 0.5rem;
+      color: var(--muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .weather-detail .wval {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-top: 1px;
+    }
+
+    /* ─── PUBLIC BUS TABLE ─── */
+    .public-bus-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .pb-stop-block {
+      background: rgba(0,229,255,.02);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .pb-stop-name {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--accent);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pb-services {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .pb-svc {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 5px 9px;
+      min-width: 80px;
+    }
+    .pb-svc-no {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text);
+      min-width: 28px;
+    }
+    .pb-times {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .pb-time {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+    }
+    .pb-time.next { color: var(--accent); font-weight: 500; }
+    .pb-time.arriving { color: var(--accent3); font-weight: 600; }
+    .pb-load-full  { color: var(--danger); }
+    .pb-load-stand { color: var(--warning); }
+    .pb-load-seat  { color: var(--seats-ok); }
+
+    /* ─── BUS SECTION (NTU shuttle, col 4 row 1) ─── */
     .bus-section {
-      grid-column: 3;
+      grid-column: 4;
       grid-row: 1;
       display: flex;
       flex-direction: column;
       gap: 12px;
+    }
+
+    /* ─── PUBLIC BUS SECTION (full-width row 2) ─── */
+    .public-bus-section {
+      grid-column: 1 / -1;
+      grid-row: 2;
     }
 
     .bus-panel {
@@ -739,6 +851,18 @@
       background: rgba(0,229,255,.08);
       border-color: rgba(0,229,255,.25);
     }
+    .stop-item .si-code {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--accent);
+      background: rgba(0,229,255,.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      min-width: 46px;
+      text-align: center;
+      flex-shrink: 0;
+    }
     .stop-item .si-name {
       font-size: 0.82rem;
       color: var(--text);
@@ -764,6 +888,38 @@
       border-color: var(--accent);
       color: #000;
     }
+
+    .selected-stops-preview {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      min-height: 38px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .sel-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(0,229,255,.1);
+      border: 1px solid rgba(0,229,255,.25);
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .sel-chip button {
+      background: none; border: none; color: var(--accent);
+      cursor: pointer; font-size: 0.7rem; padding: 0; opacity:.7;
+    }
+    .sel-chip button:hover { opacity: 1; }
+    .sel-hint { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
 
     /* NTU route picker checkboxes */
     .route-toggles {
@@ -942,7 +1098,7 @@
   <!-- MAIN CONTENT GRID -->
   <div class="main-grid">
 
-    <!-- TODAY AT NTU (col 1) -->
+    <!-- TODAY AT NTU (col 1, row 1) -->
     <div class="card" style="grid-column:1; grid-row:1">
       <div class="card-title">Today at NTU</div>
       <div id="todayCard">
@@ -957,8 +1113,16 @@
       </div>
     </div>
 
-    <!-- SPOTIFY NOW PLAYING (col 2) -->
+    <!-- WEATHER (col 2, row 1) -->
     <div class="card" style="grid-column:2; grid-row:1">
+      <div class="card-title">Weather</div>
+      <div id="weatherContent">
+        <div class="loading-text">Fetching weather…</div>
+      </div>
+    </div>
+
+    <!-- SPOTIFY NOW PLAYING (col 3, row 1) -->
+    <div class="card" style="grid-column:3; grid-row:1">
       <div class="card-title" style="justify-content:space-between">
         <span>Now Playing</span>
         <span id="spHeaderBtn"></span>
@@ -974,7 +1138,7 @@
       </div>
     </div>
 
-    <!-- NTU SHUTTLE PANEL (col 3) -->
+    <!-- NTU SHUTTLE (col 4, row 1) -->
     <div class="bus-section">
       <div class="bus-panel">
         <div class="bus-panel-header">
@@ -993,6 +1157,25 @@
       </div>
     </div>
 
+    <!-- PUBLIC BUS (row 2, full width) -->
+    <div class="public-bus-section">
+      <div class="bus-panel">
+        <div class="bus-panel-header">
+          <div class="bus-panel-title">
+            <span class="status-dot status-offline" id="ltaStatusDot"></span>
+            Public Bus · LTA Live
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div class="last-updated" id="ltaLastUpdated">—</div>
+            <button class="refresh-btn" onclick="fetchLtaBus()">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="ltaBusContent">
+          <div class="loading-text">Select bus stops in ⚙ Settings → Bus Stops</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1007,9 +1190,29 @@
 
     <!-- Tab nav -->
     <div class="cfg-tabs">
-      <button class="cfg-tab active" onclick="switchTab('ntu')">🎓 NTU Shuttle</button>
+      <button class="cfg-tab active" onclick="switchTab('bus')">🚌 Bus Stops</button>
+      <button class="cfg-tab" onclick="switchTab('ntu')">🎓 NTU Shuttle</button>
       <button class="cfg-tab" onclick="switchTab('spotify')">🎵 Spotify</button>
+      <button class="cfg-tab" onclick="switchTab('api')">🔑 API Keys</button>
       <button class="cfg-tab" onclick="switchTab('display')">⚙ Display</button>
+    </div>
+
+    <!-- ── TAB: BUS STOPS ── -->
+    <div class="cfg-pane active" id="pane-bus">
+      <div class="field" style="margin-bottom:8px">
+        <label>Your selected stops (up to 3)</label>
+        <div class="selected-stops-preview" id="selectedStopsPreview">
+          <span style="color:var(--muted);font-size:.75rem">No stops selected — pick from the list below</span>
+        </div>
+        <div class="sel-hint">Tap a stop to add. Tap again to remove. Up to 3 stops.</div>
+      </div>
+      <div class="stop-search-wrap">
+        <span class="stop-search-icon">🔍</span>
+        <input class="stop-search" id="busStopSearchInput" type="text"
+          placeholder="Search by name, code, or bus number…"
+          oninput="filterBusStops(this.value)" autocomplete="off" />
+      </div>
+      <div class="stop-list" id="busStopListContainer"></div>
     </div>
 
     <!-- ── TAB: NTU SHUTTLE ── -->
@@ -1072,6 +1275,25 @@
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px">
         <button class="sp-connect-btn" id="spSettingsConnectBtn" onclick="spotifyLoginFromSettings()">♫ Connect Spotify</button>
         <button class="sp-disconnect-btn" id="spSettingsDisconnectBtn" onclick="spotifyLogout()" style="display:none">Disconnect</button>
+      </div>
+    </div>
+
+    <!-- ── TAB: API KEYS ── -->
+    <div class="cfg-pane" id="pane-api">
+      <div class="ntu-notice" style="margin-bottom:14px;background:rgba(0,229,255,.04);border-color:rgba(0,229,255,.2)">
+        <strong style="color:var(--accent)">✅ No API keys required by default.</strong><br>
+        Bus data uses <strong>arrivelah (busrouter.sg)</strong> — free, open, CORS-friendly.<br>
+        Weather uses <strong>NEA data.gov.sg</strong> — Singapore official open data, no key needed.
+      </div>
+      <div class="field">
+        <label>LTA DataMall API Key <span style="color:var(--muted)">(optional fallback)</span></label>
+        <input type="text" id="cfgLtaKey" placeholder="e.g. AbCd1234efGh5678==" />
+        <small>Used only if arrivelah is unavailable. Free from <strong>datamall.lta.gov.sg</strong></small>
+      </div>
+      <div class="field">
+        <label>OpenWeatherMap API Key <span style="color:var(--muted)">(optional fallback)</span></label>
+        <input type="text" id="cfgWeatherKey" placeholder="e.g. 1a2b3c4d5e6f7890abcd…" />
+        <small>Used only if NEA data.gov.sg is unavailable. Free from <strong>openweathermap.org</strong></small>
       </div>
     </div>
 
@@ -1167,11 +1389,110 @@ const NTU_STOPS = [
 const UNIQUE_STOPS = NTU_STOPS;
 
 // ═══════════════════════════════════════════════════
+// PUBLIC BUS STOP DATABASE (NTU area stops)
+// ═══════════════════════════════════════════════════
+const PUBLIC_BUS_STOPS = [
+  { area: 'On Campus – NTU',    code: '27219', name: 'NIE Block 2',                   routes: '179, CL-B, CL-R' },
+  { area: 'On Campus – NTU',    code: '27211', name: 'Lee Wee Nam Library',           routes: '179, 179A, CL-B, CL-R' },
+  { area: 'On Campus – NTU',    code: '27201', name: 'Opp Hall 8 (Nanyang Heights)',  routes: '179, CL-B, CL-R' },
+  { area: 'On Campus – NTU',    code: '63725', name: 'Opp Hall 2 (Lien Ying Chow)',   routes: '179, 199, CL-B, CL-R' },
+  { area: 'On Campus – NTU',    code: '63709', name: 'Opp SPMS / South Spine',        routes: '179, 199, CL-B, CL-R' },
+  { area: 'On Campus – NTU',    code: '63721', name: 'Admin Cluster / The Hive',      routes: '179, 199, CL-B, CL-R' },
+  { area: 'On Campus – NTU',    code: '63723', name: 'Opp WKWSCI / North Spine',      routes: '179, CL-B, CL-R' },
+  { area: 'On Campus – NTU',    code: '63705', name: 'Gaia / Academic Building South',routes: '179, 199, CL-B, CL-R' },
+  { area: 'On Campus – NTU',    code: '63731', name: 'Opp Yunnan Garden',             routes: '179, 199, CL-B, CL-R' },
+  { area: 'Halls & Residences', code: '27321', name: 'Hall 1 / Opp Hall 16',          routes: '179, 179B, CL-B' },
+  { area: 'Halls & Residences', code: '63703', name: 'Opp Hall 10 & 11',             routes: '199, CL-B, CL-R' },
+  { area: 'Halls & Residences', code: '63733', name: 'Opp Hall 14 & 15',             routes: '199, CL-B, CL-R' },
+  { area: 'Halls & Residences', code: '27331', name: 'Pioneer Hall / Nanyang Terrace',routes: '179, CL-R, CR' },
+  { area: 'Pioneer MRT (EW28)', code: '24481', name: 'Pioneer MRT Exit B (to NTU)',   routes: '179, CR, CWR' },
+  { area: 'Pioneer MRT (EW28)', code: '24489', name: 'Opp Pioneer MRT / Exit A',      routes: '179, 99, 99A' },
+  { area: 'Boon Lay (EW27)',    code: '22009', name: 'Boon Lay Bus Interchange (A)',  routes: '179, 179A, 199, 77' },
+  { area: 'Boon Lay (EW27)',    code: '22099', name: 'Boon Lay Bus Interchange (B)',  routes: '179, 199, 98A, 243' },
+  { area: 'Boon Lay (EW27)',    code: '22159', name: 'Opp Jurong Point',              routes: '77, 98, 98A, 179, 179A' },
+];
+const PUBLIC_BUS_MAP = {};
+PUBLIC_BUS_STOPS.forEach(s => { PUBLIC_BUS_MAP[s.code] = s; });
+
+let selectedStops = [];
+
+function renderBusStopList(query = '') {
+  const container = document.getElementById('busStopListContainer');
+  if (!container) return;
+  const q = query.toLowerCase().trim();
+  const areas = {};
+  PUBLIC_BUS_STOPS.forEach(stop => {
+    if (q && !stop.name.toLowerCase().includes(q) &&
+             !stop.code.includes(q) &&
+             !stop.routes.toLowerCase().includes(q) &&
+             !stop.area.toLowerCase().includes(q)) return;
+    if (!areas[stop.area]) areas[stop.area] = [];
+    areas[stop.area].push(stop);
+  });
+  let html = '';
+  for (const [area, stops] of Object.entries(areas)) {
+    html += `<div class="stop-area-label">${area}</div>`;
+    stops.forEach(stop => {
+      const sel = selectedStops.includes(stop.code);
+      html += `<div class="stop-item ${sel ? 'selected' : ''}" onclick="toggleBusStop('${stop.code}')">
+        <span class="si-code">${stop.code}</span>
+        <span class="si-name">${stop.name}</span>
+        <span class="si-routes">${stop.routes}</span>
+        <span class="si-check">${sel ? '✓' : ''}</span>
+      </div>`;
+    });
+  }
+  if (!html) html = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:.8rem">No stops found</div>`;
+  container.innerHTML = html;
+}
+
+function filterBusStops(q) { renderBusStopList(q); }
+
+function toggleBusStop(code) {
+  const idx = selectedStops.indexOf(code);
+  if (idx > -1) {
+    selectedStops.splice(idx, 1);
+  } else {
+    if (selectedStops.length >= 3) {
+      const prev = document.getElementById('selectedStopsPreview');
+      if (prev) { prev.style.borderColor = 'var(--danger)'; setTimeout(() => prev.style.borderColor = '', 800); }
+      return;
+    }
+    selectedStops.push(code);
+  }
+  renderSelectedChips();
+  renderBusStopList(document.getElementById('busStopSearchInput')?.value || '');
+}
+
+function renderSelectedChips() {
+  const preview = document.getElementById('selectedStopsPreview');
+  if (!preview) return;
+  if (selectedStops.length === 0) {
+    preview.innerHTML = `<span style="color:var(--muted);font-size:.75rem">No stops selected — pick from the list below</span>`;
+    return;
+  }
+  preview.innerHTML = selectedStops.map(code => {
+    const stop = PUBLIC_BUS_MAP[code];
+    const label = stop ? `${code} · ${stop.name.split('(')[0].trim()}` : code;
+    return `<span class="sel-chip">${label}<button onclick="removeBusStop('${code}')" title="Remove">×</button></span>`;
+  }).join('');
+}
+
+function removeBusStop(code) {
+  selectedStops = selectedStops.filter(c => c !== code);
+  renderSelectedChips();
+  renderBusStopList(document.getElementById('busStopSearchInput')?.value || '');
+}
+
+// ═══════════════════════════════════════════════════
 // CONFIG & STATE
 // ═══════════════════════════════════════════════════
 const DEFAULT_CONFIG = {
   ntuStop:         'Hall 1',
   ntuRoutes:       'CL-B,CL-R,CR',
+  busStops:        [],
+  ltaKey:          '',
+  weatherKey:      '',
   refresh:         30,
   spotifyClientId: '',
 };
@@ -1193,7 +1514,7 @@ function switchTab(name) {
   document.querySelectorAll('.cfg-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.cfg-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('pane-' + name).classList.add('active');
-  document.querySelectorAll('.cfg-tab')[['ntu','spotify','display'].indexOf(name)].classList.add('active');
+  document.querySelectorAll('.cfg-tab')[['bus','ntu','spotify','api','display'].indexOf(name)].classList.add('active');
 }
 
 // ── Stop list rendering (single-select, pick your stop label) ──
@@ -1244,9 +1565,18 @@ function selectStop(name) {
 function saveConfig() {
   cfg.refresh = parseInt(document.getElementById('cfgRefresh').value) || 30;
 
+  // API keys
+  const ltaEl = document.getElementById('cfgLtaKey');
+  if (ltaEl) cfg.ltaKey = ltaEl.value.trim();
+  const wxEl = document.getElementById('cfgWeatherKey');
+  if (wxEl) cfg.weatherKey = wxEl.value.trim();
+
   // Spotify client ID
   const spIdEl = document.getElementById('cfgSpClientId');
   if (spIdEl) cfg.spotifyClientId = spIdEl.value.trim();
+
+  // Bus stops (from selectedStops array)
+  cfg.busStops = [...selectedStops];
 
   // Build ntuRoutes from checkboxes
   const routes = [];
@@ -1256,7 +1586,6 @@ function saveConfig() {
   if (document.getElementById('rt-cwr').checked)  routes.push('CWR');
   cfg.ntuRoutes = routes.length ? routes.join(',') : 'CL-B,CL-R,CR';
 
-  // ntuStop is set live by selectStop()
   localStorage.setItem('smartDisplayConfig', JSON.stringify(cfg));
   closeConfig();
   startApp();
@@ -1265,24 +1594,37 @@ function saveConfig() {
 function openConfig() {
   document.getElementById('cfgRefresh').value = cfg.refresh || 30;
 
-  // Sync route checkboxes
+  // API keys
+  const ltaEl = document.getElementById('cfgLtaKey');
+  if (ltaEl) ltaEl.value = cfg.ltaKey || '';
+  const wxEl = document.getElementById('cfgWeatherKey');
+  if (wxEl) wxEl.value = cfg.weatherKey || '';
+
+  // Bus stops
+  selectedStops = [...(cfg.busStops || [])];
+  renderSelectedChips();
+  renderBusStopList();
+  const bsInput = document.getElementById('busStopSearchInput');
+  if (bsInput) bsInput.value = '';
+
+  // NTU route checkboxes
   const routes = (cfg.ntuRoutes || 'CL-B,CL-R,CR').split(',').map(r => r.trim());
   document.getElementById('rt-clb').checked = routes.includes('CL-B');
   document.getElementById('rt-clr').checked = routes.includes('CL-R');
   document.getElementById('rt-cr').checked  = routes.includes('CR');
   document.getElementById('rt-cwr').checked = routes.includes('CWR');
 
+  // NTU stop picker
+  renderStopList();
+  document.getElementById('stopSearchInput').value = '';
+
   // Spotify
   const spIdEl = document.getElementById('cfgSpClientId');
   if (spIdEl) spIdEl.value = cfg.spotifyClientId || '';
   spUpdateSettingsPanel();
 
-  // Render stop picker
-  renderStopList();
-  document.getElementById('stopSearchInput').value = '';
-
   document.getElementById('configModal').classList.add('open');
-  switchTab('ntu');
+  switchTab('bus');
 }
 
 function closeConfig() {
@@ -1847,19 +2189,242 @@ async function spInit() {
 }
 
 // ═══════════════════════════════════════════════════
+// WEATHER — NEA data.gov.sg (primary) + OWM fallback
+// ═══════════════════════════════════════════════════
+const WEATHER_ICON = {
+  'Fair':'☀️','Fair (Day)':'☀️','Fair (Night)':'🌙',
+  'Fair & Warm':'🌤️','Partly Cloudy':'⛅','Partly Cloudy (Day)':'⛅','Partly Cloudy (Night)':'🌥️',
+  'Cloudy':'☁️','Hazy':'🌫️','Slightly Hazy':'🌫️',
+  'Windy':'💨','Mist':'🌫️','Fog':'🌫️',
+  'Light Rain':'🌦️','Moderate Rain':'🌧️','Heavy Rain':'🌧️',
+  'Passing Showers':'🌦️','Light Showers':'🌦️','Showers':'🌧️','Heavy Showers':'🌧️',
+  'Thundery Showers':'⛈️','Heavy Thundery Showers':'⛈️',
+  'Heavy Thundery Showers with Gusty Winds':'⛈️',
+};
+function wxIcon(desc) {
+  return WEATHER_ICON[desc] || (desc.includes('Thunder') ? '⛈️' : desc.includes('Rain') ? '🌧️' : '⛅');
+}
+function wxWindDir(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+function wxHeatIndex(tempC, rh) {
+  const T = tempC * 9/5 + 32, R = rh;
+  let hi = -42.379 + 2.04901523*T + 10.14333127*R - 0.22475541*T*R
+    - 0.00683783*T*T - 0.05481717*R*R + 0.00122874*T*T*R
+    + 0.00085282*T*R*R - 0.00000199*T*T*R*R;
+  return ((hi - 32) * 5/9).toFixed(1);
+}
+
+async function fetchWeatherNEA() {
+  const BASE = 'https://api.data.gov.sg/v1/environment';
+  const [tempR, humR, windR, fcR] = await Promise.all([
+    fetch(`${BASE}/air-temperature`),
+    fetch(`${BASE}/relative-humidity`),
+    fetch(`${BASE}/wind-speed`),
+    fetch(`${BASE}/24-hour-weather-forecast`),
+  ]);
+  const [tempD, humD, windD, fcD] = await Promise.all([
+    tempR.json(), humR.json(), windR.json(), fcR.json()
+  ]);
+
+  // Find nearest reading to NTU (Jurong West area)
+  const pickNearest = (readings, lat=1.3483, lon=103.6831) => {
+    if (!readings?.length) return null;
+    return readings.reduce((best, r) => {
+      if (!r.location) return best;
+      const d = Math.hypot(r.location.latitude - lat, r.location.longitude - lon);
+      return (!best || d < best.d) ? { ...r, d } : best;
+    }, null);
+  };
+
+  const tempReading = pickNearest(tempD.items?.[0]?.readings);
+  const humReading  = pickNearest(humD.items?.[0]?.readings);
+  const windReading = pickNearest(windD.items?.[0]?.readings);
+  const fc          = fcD.items?.[0]?.general;
+
+  const temp = tempReading?.value ?? '—';
+  const hum  = humReading?.value  ?? '—';
+  const wind = windReading?.value ?? '—';
+  const desc = fc?.forecast ?? 'No forecast';
+  const hi   = (typeof temp === 'number' && typeof hum === 'number')
+               ? wxHeatIndex(temp, hum) : null;
+
+  renderWeather({ temp, hum, wind, desc, hi, source: 'NEA' });
+}
+
+async function fetchWeatherOWM(apiKey) {
+  const url = `https://api.openweathermap.org/data/2.5/weather?lat=1.3483&lon=103.6831&appid=${apiKey}&units=metric`;
+  const res  = await fetch(url);
+  if (!res.ok) throw new Error(`OWM ${res.status}`);
+  const d    = await res.json();
+  const temp = d.main.temp.toFixed(1);
+  const hum  = d.main.humidity;
+  const wind = (d.wind.speed * 3.6).toFixed(1); // m/s → km/h
+  const desc = d.weather[0].description.replace(/\b\w/g, c => c.toUpperCase());
+  const hi   = wxHeatIndex(parseFloat(temp), hum);
+  renderWeather({ temp, hum, wind, desc, hi, source: 'OWM', windKmh: true });
+}
+
+function renderWeather({ temp, hum, wind, desc, hi, source, windKmh }) {
+  const el = document.getElementById('weatherContent');
+  if (!el) return;
+  const icon    = wxIcon(desc);
+  const windStr = windKmh ? `${wind} km/h` : `${wind} km/h`;
+  el.innerHTML = `
+    <div class="weather-main">
+      <div class="weather-icon">${icon}</div>
+      <div>
+        <div class="weather-temp">${temp}<span class="weather-unit">°C</span></div>
+        <div class="weather-desc">${desc}</div>
+      </div>
+    </div>
+    <div class="weather-details">
+      <div class="weather-detail">
+        <div class="wlabel">Humidity</div>
+        <div class="wval">${hum}%</div>
+      </div>
+      <div class="weather-detail">
+        <div class="wlabel">Wind</div>
+        <div class="wval">${windStr}</div>
+      </div>
+      ${hi ? `<div class="weather-detail">
+        <div class="wlabel">Heat Index</div>
+        <div class="wval">${hi}°C</div>
+      </div>` : ''}
+      <div class="weather-detail">
+        <div class="wlabel">Location</div>
+        <div class="wval" style="font-size:.7rem">Jurong West</div>
+      </div>
+    </div>`;
+}
+
+async function fetchWeather() {
+  try {
+    await fetchWeatherNEA();
+  } catch (e) {
+    console.warn('NEA weather failed:', e.message);
+    if (cfg.weatherKey) {
+      try { await fetchWeatherOWM(cfg.weatherKey); return; } catch(e2) { console.warn('OWM fallback failed:', e2.message); }
+    }
+    const el = document.getElementById('weatherContent');
+    if (el) el.innerHTML = `<div class="loading-text" style="color:var(--muted)">Weather unavailable</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// PUBLIC BUS — arrivelah (busrouter.sg) proxy for LTA
+// ═══════════════════════════════════════════════════
+let ltaRefreshInterval = null;
+
+function fmtArrival(mins) {
+  if (mins <= 0)  return { text: 'Arr', cls: 'arriving' };
+  if (mins === 1) return { text: '1 min', cls: 'arriving' };
+  return { text: `${mins} min`, cls: mins <= 3 ? 'next' : '' };
+}
+function loadClass(load) {
+  if (!load) return '';
+  if (load === 'SEA') return 'pb-load-full';
+  if (load === 'SDA') return 'pb-load-stand';
+  return 'pb-load-seat';
+}
+function loadLabel(load) {
+  if (load === 'SEA') return '🔴';
+  if (load === 'SDA') return '🟡';
+  if (load === 'LSD') return '🟢';
+  return '';
+}
+
+async function fetchBusStop(stopCode) {
+  const url = `https://arrivelah2.busrouter.sg/?id=${stopCode}`;
+  const res  = await fetch(url);
+  if (!res.ok) throw new Error(`arrivelah ${res.status}`);
+  return res.json();
+}
+
+async function fetchLtaBus() {
+  const stops = cfg.busStops || [];
+  const el    = document.getElementById('ltaBusContent');
+  const dot   = document.getElementById('ltaStatusDot');
+  const upd   = document.getElementById('ltaLastUpdated');
+
+  if (!stops.length) {
+    if (el) el.innerHTML = `<div class="loading-text">Select bus stops in ⚙ Settings → Bus Stops</div>`;
+    if (dot) dot.className = 'status-dot status-offline';
+    return;
+  }
+
+  if (el) el.innerHTML = `<div class="loading-text">Loading bus arrivals…</div>`;
+
+  try {
+    const results = await Promise.all(stops.map(code => fetchBusStop(code)));
+
+    let html = '<div class="public-bus-grid">';
+    results.forEach((data, i) => {
+      const code     = stops[i];
+      const stopInfo = PUBLIC_BUS_MAP[code];
+      const name     = stopInfo ? stopInfo.name : `Stop ${code}`;
+      const services = data.services || [];
+
+      html += `<div class="pb-stop-block">
+        <div class="pb-stop-name">🚏 ${name} <span style="opacity:.5">(${code})</span></div>
+        <div class="pb-services">`;
+
+      if (!services.length) {
+        html += `<div style="color:var(--muted);font-size:.75rem;padding:4px 0">No services available</div>`;
+      } else {
+        services.forEach(svc => {
+          const next = svc.next;
+          const sub  = svc.subsequent;
+          const arr1 = fmtArrival(next?.duration_ms != null ? Math.round(next.duration_ms / 60000) : 99);
+          const arr2 = sub?.duration_ms != null ? fmtArrival(Math.round(sub.duration_ms / 60000)) : null;
+          html += `<div class="pb-svc">
+            <span class="pb-svc-no">${svc.no}</span>
+            <div class="pb-times">
+              <span class="pb-time next ${arr1.cls} ${loadClass(next?.load)}">${loadLabel(next?.load)} ${arr1.text}</span>
+              ${arr2 ? `<span class="pb-time ${arr2.cls} ${loadClass(sub?.load)}">${loadLabel(sub?.load)} ${arr2.text}</span>` : ''}
+            </div>
+          </div>`;
+        });
+      }
+      html += `</div></div>`;
+    });
+    html += '</div>';
+
+    if (el) el.innerHTML = html;
+    if (dot) dot.className = 'status-dot status-online';
+    if (upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' });
+
+  } catch (e) {
+    console.warn('LTA bus fetch error:', e.message);
+    if (el) el.innerHTML = `<div class="loading-text" style="color:var(--muted)">Bus data unavailable — check connection</div>`;
+    if (dot) dot.className = 'status-dot status-offline';
+  }
+}
+
+// ═══════════════════════════════════════════════════
 // APP INIT & REFRESH LOOP
 // ═══════════════════════════════════════════════════
 function startApp() {
-  if (clockInterval)   clearInterval(clockInterval);
-  if (refreshInterval) clearInterval(refreshInterval);
+  if (clockInterval)    clearInterval(clockInterval);
+  if (refreshInterval)  clearInterval(refreshInterval);
+  if (ltaRefreshInterval) clearInterval(ltaRefreshInterval);
 
   updateClock();
   clockInterval = setInterval(updateClock, 1000);
 
+  // NTU shuttle — refresh every cfg.refresh seconds
   fetchNtuBus();
-
   const interval = Math.max(15, cfg.refresh) * 1000;
   refreshInterval = setInterval(fetchNtuBus, interval);
+
+  // Weather — refresh every 10 minutes
+  fetchWeather();
+  setInterval(fetchWeather, 10 * 60 * 1000);
+
+  // Public bus — refresh every 30 seconds
+  fetchLtaBus();
+  ltaRefreshInterval = setInterval(fetchLtaBus, 30 * 1000);
 }
 
 // ── First boot ──
